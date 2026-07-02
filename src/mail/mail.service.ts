@@ -26,9 +26,9 @@ export class MailService {
         subject,
         html,
       });
-      this.logger.log(`✅ Correo enviado con éxito a ${to}. ID: ${info.messageId}`);
+      this.logger.log(` Correo enviado con éxito a ${to}. ID: ${info.messageId}`);
     } catch (error: any) {
-      this.logger.error(`❌ Error enviando correo a ${to}: ${error.message}`);
+      this.logger.error(` Error enviando correo a ${to}: ${error.message}`);
     }
   }
 
@@ -36,7 +36,7 @@ export class MailService {
     const adminEmail = process.env.EMAIL_ADMIN || 'cocowheel3@gmail.com';
     const html = `
       <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-        <h2 style="color: #4285f4;">💻 Alerta de Sistema: Nuevo Registro</h2>
+        <h2 style="color: #4285f4;"> Alerta de Sistema: Nuevo Registro</h2>
         <p>Se ha registrado un nuevo evento en la plataforma.</p>
         <p><strong>Evento:</strong> ${evento.nombre_evento} (ID: ${evento.id_evento})<br><strong>Coordinador:</strong> ${evento.correo_coordinador}</p>
       </div>
@@ -47,7 +47,7 @@ export class MailService {
   async enviarConfirmacionCoordinador(evento: any) {
     const html = `
       <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-        <h2 style="color: #34a853;">✅ Tu evento ha sido registrado</h2>
+        <h2 style="color: #34a853;"> Tu evento ha sido registrado</h2>
         <p>Estimado(a) <strong>${evento.nombre_coordinador}</strong>, su solicitud para el evento <strong>"${evento.nombre_evento}"</strong> fue guardada correctamente.</p>
         <p>Se ha notificado al área de Cobertura (Gelasio) y a los departamentos de apoyo seleccionados.</p>
       </div>
@@ -59,7 +59,7 @@ export class MailService {
     const gelasioEmail = process.env.EMAIL_GELASIO || 'gelasio.reyes@umad.edu.mx';
     const html = `
       <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #fcfcfc;">
-        <h2 style="color: #f4b400;">📅 Solicitud de Cobertura y Agenda</h2>
+        <h2 style="color: #f4b400;"> Solicitud de Cobertura y Agenda</h2>
         <p>Hola Gelasio, hay un nuevo evento que requiere ser integrado al calendario institucional:</p>
         <div style="background: #ffffff; padding: 15px; border-left: 4px solid #f4b400; margin: 15px 0; border: 1px solid #eee; border-left: 4px solid #f4b400;">
           <strong>Título del Evento:</strong> ${evento.nombre_evento}<br>
@@ -72,13 +72,13 @@ export class MailService {
         </div>
       </div>
     `;
-    await this.send({ to: gelasioEmail, subject: `🚨 Cobertura de Evento - ${evento.nombre_evento}`, html });
+    await this.send({ to: gelasioEmail, subject: ` Cobertura de Evento - ${evento.nombre_evento}`, html });
   }
 
   async enviarNotificacionArea(emailArea: string, evento: any) {
     const html = `
       <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-        <h2 style="color: #db4437;">🛠️ Solicitud de Apoyo de Departamento</h2>
+        <h2 style="color: #db4437;"> Solicitud de Apoyo de Departamento</h2>
         <p>Se ha solicitado el apoyo de su área para el desarrollo del siguiente evento:</p>
         <blockquote style="background: #f8f9fa; padding: 15px; border-left: 4px solid #db4437; margin: 15px 0;">
           <strong>Evento:</strong> ${evento.nombre_evento}<br>
@@ -100,7 +100,7 @@ export class MailService {
 
     const html = `
       <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #1a73e8; text-align: center;">⏰ Recordatorio de Evento Próximo</h2>
+        <h2 style="color: #1a73e8; text-align: center;"> Recordatorio de Evento Próximo</h2>
         <p>Estimado(a) <strong>${evento.nombre_coordinador}</strong>,</p>
         <p>Te recordamos que tu evento está programado para dentro de **${tiempoRestanteTexto}**.</p>
         
@@ -115,10 +115,10 @@ export class MailService {
         
         <div style="text-align: center; margin: 25px 0;">
           <a href="${urlConfirmar}" style="background-color: #34a853; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 5px; margin-right: 15px; display: inline-block;">
-            ✅ Confirmar Evento
+             Confirmar Evento
           </a>
           <a href="${urlCancelar}" style="background-color: #db4437; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 5px; display: inline-block;">
-            ❌ Cancelar Evento
+             Cancelar Evento
           </a>
         </div>
         
@@ -130,7 +130,7 @@ export class MailService {
 
     await this.send({
       to: evento.correo_coordinador,
-      subject: `⚠️ Recordatorio (${tiempoRestanteTexto}) - ${evento.nombre_evento}`,
+      subject: ` Recordatorio (${tiempoRestanteTexto}) - ${evento.nombre_evento}`,
       html,
     });
   }
