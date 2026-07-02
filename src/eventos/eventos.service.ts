@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { MailService } from '../mail/mail.service';
+import { Cron, CronExpression } from '@nestjs/schedule'; // ⏰ Importación necesaria para el programador
 
 @Injectable()
 export class EventosService {
@@ -49,7 +50,7 @@ export class EventosService {
     this.logger.log(`💾 Evento e intermedias guardados con éxito en Neon. ID: ${nuevoEvento.id_evento}`);
 
     // 3. Disparar el flujo de correos en segundo plano jalando los datos de la BD
-    this.ejecutarFlujoCorreosDinamico(nuevoEvento.id_evento).catch(err => {
+    this.ejecutarFlujoCorreosDinamico(nuevoEvento.id_evento).catch((err: any) => { // Tipado :any agregado
       this.logger.error(`❌ Error en el proceso asíncrono de correos: ${err.message}`);
     });
 
@@ -100,6 +101,72 @@ export class EventosService {
       if (area.correocontacto_area) {
         await this.mailService.enviarNotificacionArea(area.correocontacto_area, infoEventoCompleto);
       }
+    }
+  }
+
+  /**
+   * ⏰ TAREA AUTOMATIZADA: Cron Job por Hora
+   * Escanea la base de datos buscando eventos en estatus 'Pendiente' (id_estatus_evento = 1)
+   * que estén a exactamente 5 días, 2 días o 4 horas de comenzar.
+   */
+  @Cron(CronExpression.EVERY_HOUR)
+  async verificarYEnviarRecordatorios() {
+    this.logger.log('⏰ Ejecutando escaneo automático de recordatorios...');
+
+    try {
+      const queryBase = `
+        SELECT e.*, 
+               u.correo_usuario as correo_coordinador, 
+               (u.nombre_usuario || ' ' || u.apellidop_usuario) as nombre_coordinador,
+               esp.nombre_espacio
+        FROM Eventos e
+        JOIN Usuarios u ON e.id_usuario = u.id_usuario
+        LEFT JOIN Espacios esp ON e.id_espacio = esp.id_espacio
+        WHERE e.id_estatus_evento = 1
+      `;
+
+      const res = await this.db.query(queryBase, []);
+      const eventosPendientes = res.rows;
+      const ahora = new Date();
+
+      for (const evento of eventosPendientes) {
+        // Reconstruimos la fecha y hora de inicio exacta del evento
+        const fechaEventoOriginal = new Date(evento.fecha_evento);
+        const [horas, minutos, segundos] = evento.horainicio_evento.split(':');
+        
+        const fechaHoraInicio = new Date(
+          fechaEventoOriginal.getFullYear(),
+          fechaEventoOriginal.getMonth(),
+          fechaEventoOriginal.getDate(),
+          parseInt(horas),
+          parseInt(minutos),
+          parseInt(segundos)
+        );
+
+        // Calculamos la diferencia de tiempo restante en horas
+        const diferenciaMilisegundos = fechaHoraInicio.getTime() - ahora.getTime();
+        const diferenciaHoras = diferenciaMilisegundos / (1000 * 60 * 60);
+
+        // 1. Margen de 5 días antes (Entre 120 y 121 horas de diferencia)
+        if (diferenciaHoras >= 120 && diferenciaHoras < 121) {
+          await this.mailService.enviarRecordatorioCoordinador(evento, '5 días');
+          this.logger.log(`📧 Recordatorio de 5 días enviado para el evento ID: ${evento.id_evento}`);
+        }
+        
+        // 2. Margen de 2 días antes (Entre 48 y 49 horas de diferencia)
+        else if (diferenciaHoras >= 48 && diferenciaHoras < 49) {
+          await this.mailService.enviarRecordatorioCoordinador(evento, '2 días');
+          this.logger.log(`📧 Recordatorio de 2 días enviado para el evento ID: ${evento.id_evento}`);
+        }
+        
+        // 3. Margen de 4 horas antes (Entre 4 y 5 horas de diferencia)
+        else if (diferenciaHoras >= 4 && diferenciaHoras < 5) {
+          await this.mailService.enviarRecordatorioCoordinador(evento, '4 horas');
+          this.logger.log(`📧 Recordatorio de 4 horas enviado para el evento ID: ${evento.id_evento}`);
+        }
+      }
+    } catch (error: any) {
+      this.logger.error(`❌ Error en el Cron Job de recordatorios: ${error.message}`);
     }
   }
 }

@@ -5,7 +5,7 @@ import { DatabaseModule } from '../database/database.module'; // Para que use tu
 import { MailModule } from '../mail/mail.module'; // Para que pueda enviar correos
 
 @Module({
-  imports: [DatabaseModule, MailModule], // ⬅️ Aquí inyectamos ambos módulos
+  imports: [DatabaseModule, MailModule], 
   controllers: [EventosController],
   providers: [EventosService],
 })
