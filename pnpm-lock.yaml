@@ -23,6 +23,9 @@ importers:
       '@nestjs/schedule':
         specifier: ^6.1.3
         version: 6.1.3(@nestjs/common@11.1.27(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.27)
+      cron:
+        specifier: ^4.4.0
+        version: 4.4.0
       googleapis:
         specifier: ^173.0.0
         version: 173.0.0
@@ -54,9 +57,6 @@ importers:
       '@nestjs/testing':
         specifier: ^11.0.1
         version: 11.1.27(@nestjs/common@11.1.27(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.27)(@nestjs/platform-express@11.1.27)
-      '@types/cron':
-        specifier: ^2.4.3
-        version: 2.4.3
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
@@ -813,10 +813,6 @@ packages:
 
   '@types/cookiejar@2.1.5':
     resolution: {integrity: sha512-he+DHOWReW0nghN24E1WUqM0efK4kI9oTqDm6XmK8ZPe2djZ90BSNdGnIyCLzCPw7/pogPlGbzI2wHGGmi4O/Q==}
-
-  '@types/cron@2.4.3':
-    resolution: {integrity: sha512-ViRBkoZD9Rk0hGeMdd2GHGaOaZuH9mDmwsE5/Zo53Ftwcvh7h9VJc8lIt2wdgEwS4EW5lbtTX6vlE0idCLPOyA==}
-    deprecated: This is a stub types definition. cron provides its own type definitions, so you do not need this installed.
 
   '@types/eslint-scope@3.7.7':
     resolution: {integrity: sha512-MzMFlSLBqNF2gcHWO0G1vP/YQyfvrxZ0bF+u7mzUdZ1/xK4A4sru+nraZz5i3iEIk1l1uyicaDVTB4QbbEkAYg==}
@@ -4132,10 +4128,6 @@ snapshots:
       '@types/node': 24.13.2
 
   '@types/cookiejar@2.1.5': {}
-
-  '@types/cron@2.4.3':
-    dependencies:
-      cron: 4.4.0
 
   '@types/eslint-scope@3.7.7':
     dependencies:
