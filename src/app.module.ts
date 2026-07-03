@@ -10,6 +10,7 @@ import { PlantelesModule } from './planteles/planteles.module';
 import { EspaciosModule } from './espacios/espacios.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
 import { AreasModule } from './areas/areas.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AreasModule } from './areas/areas.module';
     EspaciosModule,
     ProveedoresModule,
     AreasModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
