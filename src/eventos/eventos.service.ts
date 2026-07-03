@@ -92,6 +92,9 @@ export class EventosService {
     }
 
     async agendarYNotificar(datosFormulario: any) {
+        // Muestra en tu consola todo lo que envía React para validar mapeos
+        console.log(" DENTRO DE NESTJS - DATOS RECIBIDOS DEL FORMULARIO:", datosFormulario);
+
         const {
             nombre: nombre_evento,
             comentarios: descripcion_evento,
@@ -103,8 +106,8 @@ export class EventosService {
             horaApartado: horapreparacion_evento,
             prioridad: priority_texto, 
             id_usuario,
-            plantel: id_plantel, 
-            area: id_espacio,    
+            plantel: plantelNombre, 
+            area: espacioNombre,    
             id_area_solicitante = 1, 
             ids_areas_apoyo = []    
         } = datosFormulario;
@@ -114,44 +117,74 @@ export class EventosService {
         if (priority_texto === 'Baja') id_prioridad = 3;
 
         let id_estatus_evento = 1; 
-
-        const sqlEvento = `
-        INSERT INTO Eventos (
-            nombre_evento, descripcion_evento, objetivo_evento, publicoobjetivo_eventos,
-            fecha_evento, horainicio_evento, horafin_evento, horapreparacion_evento,
-            id_prioridad, id_estatus_evento, id_usuario, id_plantel, id_espacio, id_area_solicitante
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        RETURNING *
-        `;
-
-        const resEvento = await this.db.query(sqlEvento, [
-            nombre_evento, descripcion_evento, objetivo_evento, publicoobjetivo_eventos,
-            fecha_evento, horainicio_evento, horafin_evento, horapreparacion_evento,
-            id_prioridad, id_estatus_evento, id_usuario, id_plantel, id_espacio, id_area_solicitante
-        ]);
-        const nuevoEvento = resEvento.rows[0];
-
-        // --- 1ER CAMBIO: Se cambió 'Evento_Area' por 'Evento_Departamento' y 'estatus_eventoa' por 'estado_apoyo' ---
-        if (ids_areas_apoyo && ids_areas_apoyo.length > 0) {
-            for (const id_area of ids_areas_apoyo) {
-                await this.db.query(
-                    `INSERT INTO Evento_Departamento (id_evento, id_area, estado_apoyo) VALUES ($1, $2, 'Pendiente')`,
-                    [nuevoEvento.id_evento, id_area]
-                );
+        
+        try {
+            // Buscar o crear el Plantel para obtener su ID numérico
+            let id_plantel = null;
+            if (plantelNombre) {
+                const resPlantel = await this.db.query('SELECT id_plantel FROM Planteles WHERE nombre_plantel = $1', [plantelNombre]);
+                if (resPlantel.rows.length > 0) {
+                    id_plantel = resPlantel.rows[0].id_plantel;
+                } else {
+                    const insertPlantel = await this.db.query('INSERT INTO Planteles (nombre_plantel) VALUES ($1) RETURNING id_plantel', [plantelNombre]);
+                    id_plantel = insertPlantel.rows[0].id_plantel;
+                }
             }
+
+            // Buscar o crear el Espacio (Área) para obtener su ID numérico
+            let id_espacio = null;
+            if (espacioNombre) {
+                const resEspacio = await this.db.query('SELECT id_espacio FROM Espacios WHERE nombre_espacio = $1', [espacioNombre]);
+                if (resEspacio.rows.length > 0) {
+                    id_espacio = resEspacio.rows[0].id_espacio;
+                } else {
+                    const insertEspacio = await this.db.query('INSERT INTO Espacios (nombre_espacio, id_plantel) VALUES ($1, $2) RETURNING id_espacio', [espacioNombre, id_plantel]);
+                    id_espacio = insertEspacio.rows[0].id_espacio;
+                }
+            }
+
+            const sqlEvento = `
+            INSERT INTO Eventos (
+                nombre_evento, descripcion_evento, objetivo_evento, publicoobjetivo_eventos,
+                fecha_evento, horainicio_evento, horafin_evento, horapreparacion_evento,
+                id_prioridad, id_estatus_evento, id_usuario, id_plantel, id_espacio, id_area_solicitante
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING *
+            `;
+
+            const resEvento = await this.db.query(sqlEvento, [
+                nombre_evento, descripcion_evento, objetivo_evento, publicoobjetivo_eventos,
+                fecha_evento, horainicio_evento, horafin_evento, horapreparacion_evento,
+                id_prioridad, id_estatus_evento, id_usuario, id_plantel, id_espacio, id_area_solicitante
+            ]);
+            const nuevoEvento = resEvento.rows[0];
+
+            if (ids_areas_apoyo && ids_areas_apoyo.length > 0) {
+                for (const id_area of ids_areas_apoyo) {
+                    await this.db.query(
+                        `INSERT INTO Evento_Departamento (id_evento, id_area, estado_apoyo) VALUES ($1, $2, 'Pendiente')`,
+                        [nuevoEvento.id_evento, id_area]
+                    );
+                }
+            }
+
+            this.logger.log(` Evento e intermedias guardados con éxito en Neon. ID: ${nuevoEvento.id_evento}`);
+
+            this.ejecutarFlujoCorreosDinamico(nuevoEvento.id_evento).catch((err: any) => {
+                this.logger.error(` Error en el proceso asíncrono de correos: ${err.message}`);
+            });
+
+            return {
+                exito: true,
+                mensaje: 'Evento registrado con éxito.',
+                id_evento: nuevoEvento.id_evento
+            };
+
+        } catch (dbError: any) {
+            // Captura el error exacto que arroje Neon (PostgreSQL)
+            this.logger.error(` CRÍTICO - Error directo de PostgreSQL al insertar evento: ${dbError.message}`);
+            throw new Error(`Error en BD: ${dbError.message}`);
         }
-
-        this.logger.log(` Evento e intermedias guardados con éxito en Neon. ID: ${nuevoEvento.id_evento}`);
-
-        this.ejecutarFlujoCorreosDinamico(nuevoEvento.id_evento).catch((err: any) => {
-            this.logger.error(` Error en el proceso asíncrono de correos: ${err.message}`);
-        });
-
-        return {
-            exito: true,
-            mensaje: 'Evento registrado con éxito.',
-            id_evento: nuevoEvento.id_evento
-        };
     }
 
     private async ejecutarFlujoCorreosDinamico(id_evento: number) {
@@ -164,7 +197,6 @@ export class EventosService {
         const resInfo = await this.db.query(sqlInfoCompleta, [id_evento]);
         const infoEventoCompleto = resInfo.rows[0];
 
-        // --- 2DO CAMBIO: Ajustado para consultar 'Evento_Departamento' en vez de 'Evento_Area' ---
         const sqlAreasAsociadas = `
         SELECT a.nombre_area, a.correocontacto_area 
         FROM Evento_Departamento ed
@@ -202,7 +234,6 @@ export class EventosService {
 
                 const googleRes = await this.crearEventoEnGoogleCalendar(tokensObj, infoEventoCompleto);
 
-                // --- 3ER CAMBIO: Eliminamos la columna redundante 'sincronizado' ya que por defecto es FALSE en tu script de BD ---
                 await this.db.query(`
                     INSERT INTO Evento_Calendar (id_evento, google_calendar_id, fecha_sincronizacion, oauth_email)
                     VALUES ($1, $2, CURRENT_TIMESTAMP, $3)
@@ -211,67 +242,5 @@ export class EventosService {
         } catch (gErr: any) {
             this.logger.error(` No se pudo sincronizar automáticamente en Google Calendar: ${gErr.message}`);
         }
-    }
-
-    @Cron(CronExpression.EVERY_HOUR)
-    async verificarYEnviarRecordatorios() {
-        this.logger.log(' Ejecutando escaneo automático de recordatorios...');
-
-        try {
-            const queryBase = `
-            SELECT e.*, 
-                u.correo_usuario as correo_coordinador, 
-                (u.nombre_usuario || ' ' || u.apellidop_usuario) as nombre_coordinador,
-                esp.nombre_espacio
-            FROM Eventos e
-            JOIN Usuarios u ON e.id_usuario = u.id_usuario
-            LEFT JOIN Espacios esp ON e.id_espacio = esp.id_espacio
-            WHERE e.id_estatus_evento = 1
-        `;
-
-            const res = await this.db.query(queryBase, []);
-            const eventosPendientes = res.rows;
-            const ahora = new Date();
-
-            for (const evento of eventosPendientes) {
-                const fechaString = evento.fecha_evento instanceof Date 
-                  ? evento.fecha_evento.toISOString().split('T')[0] 
-                  : evento.fecha_evento; 
-
-                const [ano, mes, dia] = fechaString.split('-');
-                const [horas, minutos, segundos] = evento.horainicio_evento.split(':');
-                 
-                const fechaHoraInicio = new Date(
-                  parseInt(ano),
-                  parseInt(mes) - 1, 
-                  parseInt(dia),
-                  parseInt(horas),
-                  parseInt(minutos),
-                  parseInt(segundos)
-                );
-
-                const diferenciaMilisegundos = fechaHoraInicio.getTime() - ahora.getTime();
-                const diferenciaHoras = diferenciaMilisegundos / (1000 * 60 * 60);
-
-                if (diferenciaHoras >= 120 && diferenciaHoras < 121) {
-                    await this.mailService.enviarRecordatorioCoordinador(evento, '5 días');
-                    this.logger.log(` Recordatorio de 5 días enviado para el evento ID: ${evento.id_evento}`);
-                }
-                else if (diferenciaHoras >= 48 && diferenciaHoras < 49) {
-                    await this.mailService.enviarRecordatorioCoordinador(evento, '2 días');
-                    this.logger.log(` Recordatorio de 2 días enviado para el evento ID: ${evento.id_evento}`);
-                }
-                else if (diferenciaHoras >= 4 && diferenciaHoras < 5) {
-                    await this.mailService.enviarRecordatorioCoordinador(evento, '4 horas');
-                    this.logger.log(` Recordatorio de 4 horas enviado para el evento ID: ${evento.id_evento}`);
-                }
-            }
-        } catch (error: any) {
-            this.logger.error(` Error en el Cron Job de recordatorios: ${error.message}`);
-        }
-    }
-
-    private async creeringEventoEnGoogleCalendar(tokensUsuario: any, evento: any) {
-         return await this.crearEventoEnGoogleCalendar(tokensUsuario, evento);
     }
 }
