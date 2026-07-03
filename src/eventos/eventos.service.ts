@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { MailService } from '../mail/mail.service';
 import { Cron, CronExpression } from '@nestjs/schedule'; // Importación necesaria para el programador
-import { google } from 'googleapis'; //  Importación oficial del SDK de Google
+import { google } from 'googleapis'; // Importación oficial del SDK de Google
 
 @Injectable()
 export class EventosService {
@@ -22,7 +22,7 @@ export class EventosService {
 
     /**
      * Genera la URL para que el usuario inicie sesión en Google y otorgue permisos
-     *  Modificado: Ahora acepta id_usuario e inyecta el 'state' para el callback
+     * Modificado: Ahora acepta id_usuario e inyecta el 'state' para el callback
      */
     generarUrlAutenticacionGoogle(id_usuario: number): string {
         const scopes = ['https://www.googleapis.com/auth/calendar'];
@@ -31,7 +31,7 @@ export class EventosService {
             access_type: 'offline', // OBLIGATORIO para obtener el refresh_token
             scope: scopes,
             prompt: 'consent', // Fuerza a mostrar la pantalla de permisos siempre
-            state: id_usuario.toString(), //  Vinculamos el ID de usuario aquí
+            state: id_usuario.toString(), // Vinculamos el ID de usuario aquí
         });
     }
 
@@ -44,7 +44,7 @@ export class EventosService {
     }
 
     /**
-     *  Guarda los tokens obtenidos directamente en las columnas individuales de la BD de Neon.
+     * Guarda los tokens obtenidos directamente en las columnas individuales de la BD de Neon.
      */
     async guardarTokensDeUsuario(id_usuario: number, tokens: any) {
         this.logger.log(` Guardando tokens de google para el usuario ID: ${id_usuario}`);
@@ -107,15 +107,34 @@ export class EventosService {
     }
 
     /**
-     * Registra un evento en la BD y dispara flujos asíncronos
+     * Registra un evento en la BD adaptado al FormularioEventos.jsx de React y dispara flujos asíncronos
      */
     async agendarYNotificar(datosFormulario: any) {
+        // Mapeamos los nombres del payload de React a las variables que usa tu query SQL
         const {
-            nombre_evento, descripcion_evento, objetivo_evento, publicoobjetivo_eventos,
-            fecha_evento, horainicio_evento, horafin_evento, horapreparacion_evento,
-            id_prioridad, id_estatus_evento, id_usuario, id_plantel, id_espacio, id_area_solicitante,
-            ids_areas_apoyo // <-- Arreglo de IDs de áreas de apoyo elegidas en el formulario: [1, 3, 4]
+            nombre: nombre_evento,
+            comentarios: descripcion_evento,
+            objetivo: objetivo_evento,
+            publicoobjetivo_eventos = 'Comunidad Universitaria', // Por si no viene en el formulario
+            fecha: fecha_evento,
+            hora: horainicio_evento,
+            horaFin: horafin_evento,
+            horaApartado: horapreparacion_evento,
+            prioridad: priority_texto, // Texto: 'Alta', 'Media', 'Baja'
+            id_usuario,
+            plantel: id_plantel, // Mapea el número de ID que corregimos en el Front
+            area: id_espacio,    // Mapea el número de ID que corregimos en el Front
+            id_area_solicitante = 1, // Valor por defecto si no lo maneja el form
+            ids_areas_apoyo = []    // Inicializado por defecto
         } = datosFormulario;
+
+        // --- MAPEO DE TEXTOS A IDS DE TUS TABLAS DE SOPORTE ---
+        let id_prioridad = 2; // Por defecto Media
+        if (priority_texto === 'Alta') id_prioridad = 1;
+        if (priority_texto === 'Baja') id_prioridad = 3;
+
+        // Ajustamos el estatus inicial (Ej: ID 1 = Pendiente)
+        let id_estatus_evento = 1; 
 
         // 1. Insertar el Evento Principal en la tabla 'Eventos'
         const sqlEvento = `
@@ -194,7 +213,7 @@ export class EventosService {
             }
         }
 
-        //  SINCRONIZACIÓN AUTOMÁTICA EN GOOGLE CALENDAR TRAS AGENDAR
+        // SINCRONIZACIÓN AUTOMÁTICA EN GOOGLE CALENDAR TRAS AGENDAR
         try {
             const resUser = await this.db.query(`SELECT google_refresh_token, google_access_token FROM Usuarios WHERE id_usuario = $1`, [infoEventoCompleto.id_usuario]);
             const usuarioTokens = resUser.rows[0];
@@ -223,7 +242,7 @@ export class EventosService {
     }
 
     /**
-     *  TAREA AUTOMATIZADA: Cron Job por Hora sin desfases de zonas horarias
+     * TAREA AUTOMATIZADA: Cron Job por Hora sin desfases de zonas horarias
      */
     @Cron(CronExpression.EVERY_HOUR)
     async verificarYEnviarRecordatorios() {
@@ -246,7 +265,6 @@ export class EventosService {
             const ahora = new Date();
 
             for (const evento of eventosPendientes) {
-                // Corrección antipatrón Zona Horaria: Extraemos la fecha pura como string YYYY-MM-DD
                 const fechaString = evento.fecha_evento instanceof Date 
                   ? evento.fecha_evento.toISOString().split('T')[0] 
                   : evento.fecha_evento; 
@@ -266,17 +284,14 @@ export class EventosService {
                 const diferenciaMilisegundos = fechaHoraInicio.getTime() - ahora.getTime();
                 const diferenciaHoras = diferenciaMilisegundos / (1000 * 60 * 60);
 
-                // 1. Margen de 5 días antes (Entre 120 y 121 horas de diferencia)
                 if (diferenciaHoras >= 120 && diferenciaHoras < 121) {
                     await this.mailService.enviarRecordatorioCoordinador(evento, '5 días');
                     this.logger.log(` Recordatorio de 5 días enviado para el evento ID: ${evento.id_evento}`);
                 }
-                // 2. Margen de 2 días antes (Entre 48 y 49 horas de diferencia)
                 else if (diferenciaHoras >= 48 && diferenciaHoras < 49) {
                     await this.mailService.enviarRecordatorioCoordinador(evento, '2 días');
                     this.logger.log(` Recordatorio de 2 días enviado para el evento ID: ${evento.id_evento}`);
                 }
-                // 3. Margen de 4 horas antes (Entre 4 y 5 horas de diferencia)
                 else if (diferenciaHoras >= 4 && diferenciaHoras < 5) {
                     await this.mailService.enviarRecordatorioCoordinador(evento, '4 horas');
                     this.logger.log(` Recordatorio de 4 horas enviado para el evento ID: ${evento.id_evento}`);
@@ -287,7 +302,6 @@ export class EventosService {
         }
     }
 
-    // Helper por si hay llamadas con nombres ligeramente modificados en flujos previos
     private async creeringEventoEnGoogleCalendar(tokensUsuario: any, evento: any) {
          return await this.crearEventoEnGoogleCalendar(tokensUsuario, evento);
     }
