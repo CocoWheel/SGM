@@ -58,8 +58,21 @@ export class EventosService {
             this.oauth2Client.setCredentials(tokensUsuario);
             const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
 
-            const fechaInicioISO = `${evento.fecha_evento}T${evento.horainicio_evento}-06:00`;
-            const fechaFinISO = `${evento.fecha_evento}T${evento.horafin_evento}-06:00`;
+            let fechaStr = evento.fecha_evento;
+            if (fechaStr instanceof Date) {
+                const yyyy = fechaStr.getFullYear();
+                const mm = String(fechaStr.getMonth() + 1).padStart(2, '0');
+                const dd = String(fechaStr.getDate()).padStart(2, '0');
+                fechaStr = `${yyyy}-${mm}-${dd}`;
+            } else if (typeof fechaStr === 'string' && fechaStr.includes('T')) {
+                fechaStr = fechaStr.split('T')[0];
+            }
+            
+            const horaInicioStr = (evento.horainicio_evento || '00:00').length === 5 ? `${evento.horainicio_evento}:00` : evento.horainicio_evento;
+            const horaFinStr = (evento.horafin_evento || '00:00').length === 5 ? `${evento.horafin_evento}:00` : evento.horafin_evento;
+
+            const fechaInicioISO = `${fechaStr}T${horaInicioStr}-06:00`;
+            const fechaFinISO = `${fechaStr}T${horaFinStr}-06:00`;
 
             const googleEvent = {
                 summary: evento.nombre_evento,
@@ -189,9 +202,10 @@ export class EventosService {
 
     private async ejecutarFlujoCorreosDinamico(id_evento: number) {
         const sqlInfoCompleta = `
-        SELECT e.*, u.correo_usuario as correo_coordinador, (u.nombre_usuario || ' ' || u.apellidop_usuario) as nombre_coordinador
+        SELECT e.*, u.correo_usuario as correo_coordinador, (u.nombre_usuario || ' ' || u.apellidop_usuario) as nombre_coordinador, es.nombre_espacio
         FROM Eventos e
         JOIN Usuarios u ON e.id_usuario = u.id_usuario
+        LEFT JOIN Espacios es ON e.id_espacio = es.id_espacio
         WHERE e.id_evento = $1
         `;
         const resInfo = await this.db.query(sqlInfoCompleta, [id_evento]);
@@ -212,6 +226,7 @@ export class EventosService {
         await this.mailService.enviarNotificacionAdmin(infoEventoCompleto, textoAreas);
         await this.mailService.enviarConfirmacionCoordinador(infoEventoCompleto);
         await this.mailService.enviarNotificacionGelasio(infoEventoCompleto, textoAreas);
+        await this.mailService.enviarInvitacionImanol(infoEventoCompleto);
 
         for (const area of areasAsignadas) {
             if (area.correocontacto_area) {

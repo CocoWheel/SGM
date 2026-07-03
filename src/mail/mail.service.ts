@@ -18,15 +18,31 @@ export class MailService {
     });
   }
 
-  private async send({ to, subject, html }: { to: string; subject: string; html: string }) {
+  private async send({
+    to,
+    subject,
+    html,
+    icalEvent,
+  }: {
+    to: string;
+    subject: string;
+    html: string;
+    icalEvent?: any;
+  }) {
     try {
-      const info = await this.transporter.sendMail({
+      const mailOptions: any = {
         from: `"SGM - Sistema de Gestión Madero" <${process.env.EMAIL_USER}>`,
         to,
         subject,
         html,
-      });
-      this.logger.log(` Correo enviado con éxito a ${to}. ID: ${info.messageId}`);
+      };
+      if (icalEvent) {
+        mailOptions.icalEvent = icalEvent;
+      }
+      const info = await this.transporter.sendMail(mailOptions);
+      this.logger.log(
+        ` Correo enviado con éxito a ${to}. ID: ${info.messageId}`,
+      );
     } catch (error: any) {
       this.logger.error(` Error enviando correo a ${to}: ${error.message}`);
     }
@@ -41,7 +57,11 @@ export class MailService {
         <p><strong>Evento:</strong> ${evento.nombre_evento} (ID: ${evento.id_evento})<br><strong>Coordinador:</strong> ${evento.correo_coordinador}</p>
       </div>
     `;
-    await this.send({ to: adminEmail, subject: `[SGM] Registro de Evento ID: ${evento.id_evento}`, html });
+    await this.send({
+      to: adminEmail,
+      subject: `[SGM] Registro de Evento ID: ${evento.id_evento}`,
+      html,
+    });
   }
 
   async enviarConfirmacionCoordinador(evento: any) {
@@ -52,11 +72,16 @@ export class MailService {
         <p>Se ha notificado al área de Cobertura (Gelasio) y a los departamentos de apoyo seleccionados.</p>
       </div>
     `;
-    await this.send({ to: evento.correo_coordinador, subject: `Confirmación de Registro - ${evento.nombre_evento}`, html });
+    await this.send({
+      to: evento.correo_coordinador,
+      subject: `Confirmación de Registro - ${evento.nombre_evento}`,
+      html,
+    });
   }
 
   async enviarNotificacionGelasio(evento: any, areasText: string) {
-    const gelasioEmail = process.env.EMAIL_GELASIO || 'gelasio.reyes@umad.edu.mx';
+    const gelasioEmail =
+      process.env.EMAIL_GELASIO || 'gelasio.reyes@umad.edu.mx';
     const html = `
       <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #fcfcfc;">
         <h2 style="color: #f4b400;"> Solicitud de Cobertura y Agenda</h2>
@@ -72,7 +97,11 @@ export class MailService {
         </div>
       </div>
     `;
-    await this.send({ to: gelasioEmail, subject: ` Cobertura de Evento - ${evento.nombre_evento}`, html });
+    await this.send({
+      to: gelasioEmail,
+      subject: ` Cobertura de Evento - ${evento.nombre_evento}`,
+      html,
+    });
   }
 
   async enviarNotificacionArea(emailArea: string, evento: any) {
@@ -88,11 +117,89 @@ export class MailService {
         </blockquote>
       </div>
     `;
-    await this.send({ to: emailArea, subject: `Solicitud de Apoyo Institucional - ${evento.nombre_evento}`, html });
+    await this.send({
+      to: emailArea,
+      subject: `Solicitud de Apoyo Institucional - ${evento.nombre_evento}`,
+      html,
+    });
+  }
+
+  async enviarInvitacionImanol(evento: any) {
+    try {
+      const imanolEmail = process.env.EMAIL_IMANOL || 'imanolaguilare@gmail.com';
+      
+      let fechaStr = evento.fecha_evento;
+      if (fechaStr instanceof Date) {
+        const yyyy = fechaStr.getFullYear();
+        const mm = String(fechaStr.getMonth() + 1).padStart(2, '0');
+        const dd = String(fechaStr.getDate()).padStart(2, '0');
+        fechaStr = `${yyyy}-${mm}-${dd}`;
+      } else if (typeof fechaStr === 'string' && fechaStr.includes('T')) {
+        fechaStr = fechaStr.split('T')[0];
+      }
+
+      const horaInicioStr = (evento.horainicio_evento || '00:00').length === 5 ? `${evento.horainicio_evento}:00` : evento.horainicio_evento;
+      const horaFinStr = (evento.horafin_evento || '00:00').length === 5 ? `${evento.horafin_evento}:00` : evento.horafin_evento;
+
+      const fechaInicio = new Date(`${fechaStr}T${horaInicioStr}-06:00`);
+      const fechaFin = new Date(`${fechaStr}T${horaFinStr}-06:00`);
+
+      const formatDateForIcal = (date: Date) => {
+        if (isNaN(date.getTime())) return new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      };
+
+      const icalContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//SGM//Sistema de Gestion Madero//ES
+CALSCALE:GREGORIAN
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:evento-${evento.id_evento}@sgm.local
+DTSTAMP:${formatDateForIcal(new Date())}
+DTSTART:${formatDateForIcal(fechaInicio)}
+DTEND:${formatDateForIcal(fechaFin)}
+SUMMARY:${evento.nombre_evento}
+DESCRIPTION:${evento.descripcion_evento || ''}
+LOCATION:${evento.nombre_espacio || 'Campus Universitario'}
+ORGANIZER;CN="Sistema SGM":mailto:${process.env.EMAIL_USER}
+ATTENDEE;RSVP=TRUE:mailto:${imanolEmail}
+END:VEVENT
+END:VCALENDAR`;
+
+      const html = `
+        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+          <h2 style="color: #4285f4;"> Nuevo Evento Agendado</h2>
+          <p>Se ha registrado un nuevo evento en el sistema.</p>
+          <p><strong>Evento:</strong> ${evento.nombre_evento}<br>
+          <strong>Descripción:</strong> ${evento.descripcion_evento}<br>
+          <strong>Fecha:</strong> ${fechaStr}<br>
+          <strong>Horario:</strong> ${horaInicioStr} - ${horaFinStr}<br>
+          <strong>Espacio:</strong> ${evento.nombre_espacio || 'Por asignar'}</p>
+          <p>Se adjunta la invitación para tu calendario.</p>
+        </div>
+      `;
+
+      await this.send({
+        to: imanolEmail,
+        subject: `[SGM] Invitación a Evento: ${evento.nombre_evento}`,
+        html,
+        icalEvent: {
+          filename: 'invitacion.ics',
+          method: 'request',
+          content: icalContent
+        }
+      });
+    } catch (e: any) {
+      this.logger.error(` Error al preparar invitación a Imanol: ${e.message}`);
+    }
   }
 
   // ⏰ NUEVO MÉTODO: Recordatorios dinámicos con botones de acción
-  async enviarRecordatorioCoordinador(evento: any, tiempoRestanteTexto: string) {
+  async enviarRecordatorioCoordinador(
+    evento: any,
+    tiempoRestanteTexto: string,
+  ) {
     // Cuando tengas tu URL final (del Frontend o del Backend), la cambias aquí
     const URL_BASE_APP = process.env.URL_FRONTEND || 'http://localhost:3000';
     const urlConfirmar = `${URL_BASE_APP}/eventos/confirmar/${evento.id_evento}`;
