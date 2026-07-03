@@ -12,6 +12,12 @@ export class EventosController {
     return await this.eventosService.agendarYNotificar(datosFormulario);
   }
 
+  @Get()
+  async obtenerEventos() {
+    return await this.eventosService.obtenerTodos();
+  }
+
+
   /**
    * 2. Genera la URL oficial de Google para iniciar sesión.
    * Tu Frontend pasará el ID del usuario logueado en la app: GET http://localhost:3000/eventos/google/url?id_usuario=5

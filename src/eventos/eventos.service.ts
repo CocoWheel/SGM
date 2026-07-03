@@ -243,4 +243,46 @@ export class EventosService {
             this.logger.error(` No se pudo sincronizar automáticamente en Google Calendar: ${gErr.message}`);
         }
     }
+
+    async obtenerTodos() {
+        const sql = `
+            SELECT 
+                e.id_evento,
+                e.nombre_evento,
+                e.descripcion_evento,
+                e.objetivo_evento,
+                e.fecha_evento,
+                e.horainicio_evento,
+                e.horafin_evento,
+                e.horapreparacion_evento,
+                e.id_prioridad as prioridad_evento,
+                e.id_estatus_evento as estatus_evento,
+                p.nombre_plantel,
+                es.nombre_espacio,
+                u.nombre_usuario || ' ' || u.apellidop_usuario as responsable_evento,
+                (
+                    SELECT json_agg(json_build_object('nombre_proveedor', pr.nombre_proveedor))
+                    FROM Evento_Departamento ed
+                    JOIN Areas ar ON ed.id_area = ar.id_area
+                    LEFT JOIN Proveedores pr ON pr.nombre_proveedor = ar.nombre_area 
+                    WHERE ed.id_evento = e.id_evento
+                ) as proveedor_evento
+            FROM Eventos e
+            LEFT JOIN Planteles p ON e.id_plantel = p.id_plantel
+            LEFT JOIN Espacios es ON e.id_espacio = es.id_espacio
+            LEFT JOIN Usuarios u ON e.id_usuario = u.id_usuario
+            ORDER BY e.fecha_evento ASC, e.horainicio_evento ASC
+        `;
+        const result = await this.db.query(sql);
+        
+        // Transform the result to match the frontend expectations
+        return result.rows.map(row => ({
+            ...row,
+            planteles: { nombre_plantel: row.nombre_plantel },
+            espacios: { nombre_espacio: row.nombre_espacio },
+            estatus_evento: row.estatus_evento === 1 ? 'Pendiente' : (row.estatus_evento === 2 ? 'Confirmado' : 'Cancelado'),
+            proveedor_evento: row.proveedor_evento ? row.proveedor_evento.map((p: any) => ({ proveedores: { nombre_proveedor: p.nombre_proveedor } })) : [],
+            requiere_cobertura: row.proveedor_evento && row.proveedor_evento.length > 0
+        }));
+    }
 }
