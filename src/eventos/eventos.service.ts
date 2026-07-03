@@ -1,14 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { MailService } from '../mail/mail.service';
-import { Cron, CronExpression } from '@nestjs/schedule'; // Importación necesaria para el programador
-import { google } from 'googleapis'; // Importación oficial del SDK de Google
+import { Cron, CronExpression } from '@nestjs/schedule'; 
+import { google } from 'googleapis'; 
 
 @Injectable()
 export class EventosService {
     private readonly logger = new Logger(EventosService.name);
 
-    // Inicializamos el cliente OAuth2 usando las variables de tu archivo .env
     private oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
@@ -20,32 +19,22 @@ export class EventosService {
         private readonly mailService: MailService,
     ) { }
 
-    /**
-     * Genera la URL para que el usuario inicie sesión en Google y otorgue permisos
-     * Modificado: Ahora acepta id_usuario e inyecta el 'state' para el callback
-     */
     generarUrlAutenticacionGoogle(id_usuario: number): string {
         const scopes = ['https://www.googleapis.com/auth/calendar'];
 
         return this.oauth2Client.generateAuthUrl({
-            access_type: 'offline', // OBLIGATORIO para obtener el refresh_token
+            access_type: 'offline', 
             scope: scopes,
-            prompt: 'consent', // Fuerza a mostrar la pantalla de permisos siempre
-            state: id_usuario.toString(), // Vinculamos el ID de usuario aquí
+            prompt: 'consent', 
+            state: id_usuario.toString(), 
         });
     }
 
-    /**
-     * Intercambia el código temporal por los tokens definitivos.
-     */
     async intercambiarCodigoPorTokens(code: string): Promise<any> {
         const { tokens } = await this.oauth2Client.getToken(code);
-        return tokens; // Retorna un objeto con access_token, refresh_token, etc.
+        return tokens; 
     }
 
-    /**
-     * Guarda los tokens obtenidos directamente en las columnas individuales de la BD de Neon.
-     */
     async guardarTokensDeUsuario(id_usuario: number, tokens: any) {
         this.logger.log(` Guardando tokens de google para el usuario ID: ${id_usuario}`);
 
@@ -56,7 +45,7 @@ export class EventosService {
         `;
 
         await this.db.query(sql, [
-            tokens.refresh_token || null, // Nota: Google solo envía el refresh_token en el primer consentimiento
+            tokens.refresh_token || null, 
             tokens.access_token,
             id_usuario
         ]);
@@ -64,15 +53,11 @@ export class EventosService {
         this.logger.log(` Tokens de Google Calendar vinculados con éxito.`);
     }
 
-    /**
-     * Inserta físicamente un evento en el Google Calendar del usuario usando sus credenciales
-     */
     async crearEventoEnGoogleCalendar(tokensUsuario: any, evento: any) {
         try {
             this.oauth2Client.setCredentials(tokensUsuario);
             const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
 
-            // Estructuramos fechas en formato ISO (Ejemplo ajustado a Zona Horaria de México -06:00)
             const fechaInicioISO = `${evento.fecha_evento}T${evento.horainicio_evento}-06:00`;
             const fechaFinISO = `${evento.fecha_evento}T${evento.horafin_evento}-06:00`;
 
@@ -106,37 +91,30 @@ export class EventosService {
         }
     }
 
-    /**
-     * Registra un evento en la BD adaptado al FormularioEventos.jsx de React y dispara flujos asíncronos
-     */
     async agendarYNotificar(datosFormulario: any) {
-        // Mapeamos los nombres del payload de React a las variables que usa tu query SQL
         const {
             nombre: nombre_evento,
             comentarios: descripcion_evento,
             objetivo: objetivo_evento,
-            publicoobjetivo_eventos = 'Comunidad Universitaria', // Por si no viene en el formulario
+            publicoobjetivo_eventos = 'Comunidad Universitaria', 
             fecha: fecha_evento,
             hora: horainicio_evento,
             horaFin: horafin_evento,
             horaApartado: horapreparacion_evento,
-            prioridad: priority_texto, // Texto: 'Alta', 'Media', 'Baja'
+            prioridad: priority_texto, 
             id_usuario,
-            plantel: id_plantel, // Mapea el número de ID que corregimos en el Front
-            area: id_espacio,    // Mapea el número de ID que corregimos en el Front
-            id_area_solicitante = 1, // Valor por defecto si no lo maneja el form
-            ids_areas_apoyo = []    // Inicializado por defecto
+            plantel: id_plantel, 
+            area: id_espacio,    
+            id_area_solicitante = 1, 
+            ids_areas_apoyo = []    
         } = datosFormulario;
 
-        // --- MAPEO DE TEXTOS A IDS DE TUS TABLAS DE SOPORTE ---
-        let id_prioridad = 2; // Por defecto Media
+        let id_prioridad = 2; 
         if (priority_texto === 'Alta') id_prioridad = 1;
         if (priority_texto === 'Baja') id_prioridad = 3;
 
-        // Ajustamos el estatus inicial (Ej: ID 1 = Pendiente)
         let id_estatus_evento = 1; 
 
-        // 1. Insertar el Evento Principal en la tabla 'Eventos'
         const sqlEvento = `
         INSERT INTO Eventos (
             nombre_evento, descripcion_evento, objetivo_evento, publicoobjetivo_eventos,
@@ -153,11 +131,11 @@ export class EventosService {
         ]);
         const nuevoEvento = resEvento.rows[0];
 
-        // 2. Insertar las áreas de apoyo elegidas en la tabla intermedia 'Evento_Area'
+        // --- 1ER CAMBIO: Se cambió 'Evento_Area' por 'Evento_Departamento' y 'estatus_eventoa' por 'estado_apoyo' ---
         if (ids_areas_apoyo && ids_areas_apoyo.length > 0) {
             for (const id_area of ids_areas_apoyo) {
                 await this.db.query(
-                    `INSERT INTO Evento_Area (id_evento, id_area, estatus_eventoa) VALUES ($1, $2, 'Pendiente')`,
+                    `INSERT INTO Evento_Departamento (id_evento, id_area, estado_apoyo) VALUES ($1, $2, 'Pendiente')`,
                     [nuevoEvento.id_evento, id_area]
                 );
             }
@@ -165,7 +143,6 @@ export class EventosService {
 
         this.logger.log(` Evento e intermedias guardados con éxito en Neon. ID: ${nuevoEvento.id_evento}`);
 
-        // 3. Disparar el flujo de correos y sincronización de Google Calendar en segundo plano
         this.ejecutarFlujoCorreosDinamico(nuevoEvento.id_evento).catch((err: any) => {
             this.logger.error(` Error en el proceso asíncrono de correos: ${err.message}`);
         });
@@ -178,7 +155,6 @@ export class EventosService {
     }
 
     private async ejecutarFlujoCorreosDinamico(id_evento: number) {
-        // A. Obtener los datos completitos del evento junto con los del Coordinador (Usuario)
         const sqlInfoCompleta = `
         SELECT e.*, u.correo_usuario as correo_coordinador, (u.nombre_usuario || ' ' || u.apellidop_usuario) as nombre_coordinador
         FROM Eventos e
@@ -188,21 +164,19 @@ export class EventosService {
         const resInfo = await this.db.query(sqlInfoCompleta, [id_evento]);
         const infoEventoCompleto = resInfo.rows[0];
 
-        // B. Obtener los correos y nombres de las Áreas de Apoyo asociadas a este evento
+        // --- 2DO CAMBIO: Ajustado para consultar 'Evento_Departamento' en vez de 'Evento_Area' ---
         const sqlAreasAsociadas = `
         SELECT a.nombre_area, a.correocontacto_area 
-        FROM Evento_Area ea
-        JOIN Areas a ON ea.id_area = a.id_area
-        WHERE ea.id_evento = $1
+        FROM Evento_Departamento ed
+        JOIN Areas a ON ed.id_area = a.id_area
+        WHERE ed.id_evento = $1
         `;
         const resAreas = await this.db.query(sqlAreasAsociadas, [id_evento]);
         const areasAsignadas = resAreas.rows;
 
-        // Mapeamos los datos para las plantillas
         const nombresAreas = areasAsignadas.map(a => a.nombre_area);
         const textoAreas = nombresAreas.length > 0 ? nombresAreas.join(', ') : 'Ninguna adicional';
 
-        // C. Lanzar los envíos utilizando la información traída de Postgres
         await this.mailService.enviarNotificacionAdmin(infoEventoCompleto, textoAreas);
         await this.mailService.enviarConfirmacionCoordinador(infoEventoCompleto);
         await this.mailService.enviarNotificacionGelasio(infoEventoCompleto, textoAreas);
@@ -213,7 +187,6 @@ export class EventosService {
             }
         }
 
-        // SINCRONIZACIÓN AUTOMÁTICA EN GOOGLE CALENDAR TRAS AGENDAR
         try {
             const resUser = await this.db.query(`SELECT google_refresh_token, google_access_token FROM Usuarios WHERE id_usuario = $1`, [infoEventoCompleto.id_usuario]);
             const usuarioTokens = resUser.rows[0];
@@ -224,16 +197,15 @@ export class EventosService {
                     access_token: usuarioTokens.google_access_token 
                 };
                 
-                // Obtenemos el nombre del espacio para la ubicación en Google
                 const resEspacio = await this.db.query(`SELECT nombre_espacio FROM Espacios WHERE id_espacio = $1`, [infoEventoCompleto.id_espacio]);
                 infoEventoCompleto.nombre_espacio = resEspacio.rows[0]?.nombre_espacio || 'Sin espacio asignado';
 
                 const googleRes = await this.crearEventoEnGoogleCalendar(tokensObj, infoEventoCompleto);
 
-                // Guardamos la constancia en tu tabla 'Evento_Calendar'
+                // --- 3ER CAMBIO: Eliminamos la columna redundante 'sincronizado' ya que por defecto es FALSE en tu script de BD ---
                 await this.db.query(`
-                    INSERT INTO Evento_Calendar (id_evento, google_calendar_id, sincronizado, fecha_sincronizacion, oauth_email)
-                    VALUES ($1, $2, true, CURRENT_TIMESTAMP, $3)
+                    INSERT INTO Evento_Calendar (id_evento, google_calendar_id, fecha_sincronizacion, oauth_email)
+                    VALUES ($1, $2, CURRENT_TIMESTAMP, $3)
                 `, [id_evento, googleRes.id, infoEventoCompleto.correo_coordinador]);
             }
         } catch (gErr: any) {
@@ -241,9 +213,6 @@ export class EventosService {
         }
     }
 
-    /**
-     * TAREA AUTOMATIZADA: Cron Job por Hora sin desfases de zonas horarias
-     */
     @Cron(CronExpression.EVERY_HOUR)
     async verificarYEnviarRecordatorios() {
         this.logger.log(' Ejecutando escaneo automático de recordatorios...');
