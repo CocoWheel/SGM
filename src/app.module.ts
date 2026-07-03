@@ -6,6 +6,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MailModule } from './mail/mail.module';
 import { EventosModule } from './eventos/eventos.module';
+import { PlantelesModule } from './planteles/planteles.module';
+import { EspaciosModule } from './espacios/espacios.module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { EventosModule } from './eventos/eventos.module';
     DatabaseModule,
     MailModule,
     EventosModule,
+    PlantelesModule,
+    EspaciosModule,
   ],
   controllers: [AppController],
   providers: [AppService],
