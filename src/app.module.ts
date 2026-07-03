@@ -9,6 +9,7 @@ import { EventosModule } from './eventos/eventos.module';
 import { PlantelesModule } from './planteles/planteles.module';
 import { EspaciosModule } from './espacios/espacios.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
+import { AreasModule } from './areas/areas.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ProveedoresModule } from './proveedores/proveedores.module';
     PlantelesModule,
     EspaciosModule,
     ProveedoresModule,
+    AreasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
