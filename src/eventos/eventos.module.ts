@@ -8,5 +8,6 @@ import { MailModule } from '../mail/mail.module'; // Para que pueda enviar corre
   imports: [DatabaseModule, MailModule], 
   controllers: [EventosController],
   providers: [EventosService],
+  exports: [EventosService],
 })
 export class EventosModule {}
