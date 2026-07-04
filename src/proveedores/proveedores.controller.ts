@@ -13,6 +13,11 @@ export class ProveedoresController {
 
   @Post()
   async crear(@Body() dto: CrearProveedorDto) {
-    return await this.proveedoresService.crear(dto.nombre_proveedor, dto.correo_proveedor || '');
+    return await this.proveedoresService.crear(
+      dto.nombre_proveedor, 
+      dto.correo_proveedor || '', 
+      dto.telefono_proveedor || '', 
+      dto.servicio_proveedor || ''
+    );
   }
 }
