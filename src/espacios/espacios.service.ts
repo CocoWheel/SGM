@@ -1,17 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 
 @Injectable()
 export class EspaciosService {
+  private readonly logger = new Logger(EspaciosService.name);
+
   constructor(private readonly db: DatabaseService) {}
 
   async obtenerTodos() {
-    const query = `
-      SELECT id_espacio, nombre_espacio, id_plantel 
-      FROM Espacios 
-      ORDER BY nombre_espacio ASC;
-    `;
-    const resultado = await this.db.query(query);
-    return resultado.rows;
+    try {
+      return await this.db.espacios.findMany({
+        select: { id_espacio: true, nombre_espacio: true, id_plantel: true },
+        orderBy: { nombre_espacio: 'asc' }
+      });
+    } catch (error) {
+      this.logger.error('Error al obtener todos los espacios:', error);
+      throw error;
+    }
   }
 }

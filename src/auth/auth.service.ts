@@ -1,5 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
 export class AuthService {
@@ -7,12 +8,10 @@ export class AuthService {
 
   async login(correo_usuario: string, contrasena_usuario: string) {
     try {
-      const result = await this.databaseService.query(
-        'SELECT * FROM usuarios WHERE correo_usuario = $1',
-        [correo_usuario],
-      );
-
-      const user = result.rows[0];
+      const user = await this.databaseService.usuarios.findUnique({
+        where: { correo_usuario },
+        include: { usuario_rol: { include: { roles: true } } } 
+      });
 
       if (!user) {
         throw new HttpException('Usuario no encontrado', HttpStatus.UNAUTHORIZED);
@@ -22,6 +21,7 @@ export class AuthService {
         throw new HttpException('Credenciales inválidas', HttpStatus.UNAUTHORIZED);
       }
 
+      // @ts-ignore
       delete user.contrasena_usuario;
 
       return {
@@ -37,37 +37,34 @@ export class AuthService {
     }
   }
 
-  async register(data: any) {
+  async register(data: RegisterDto) {
     try {
-      // Verificar si el usuario ya existe
-      const exist = await this.databaseService.query(
-        'SELECT * FROM usuarios WHERE correo_usuario = $1',
-        [data.correo_usuario],
-      );
+      const exist = await this.databaseService.usuarios.findUnique({
+        where: { correo_usuario: data.correo_usuario }
+      });
 
-      if (exist.rows.length > 0) {
+      if (exist) {
         throw new HttpException('El correo ya está en uso', HttpStatus.BAD_REQUEST);
       }
 
-      // Insertar nuevo usuario
-      const insertQuery = `
-        INSERT INTO usuarios (
-          nombre_usuario, apellidop_usuario, apellidom_usuario, 
-          correo_usuario, contrasena_usuario, telefono_usuario, id_rol
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
-      `;
-      const values = [
-        data.nombre_usuario,
-        data.apellidop_usuario,
-        data.apellidom_usuario,
-        data.correo_usuario,
-        data.contrasena_usuario,
-        data.telefono_usuario,
-        data.id_rol
-      ];
+      const user = await this.databaseService.usuarios.create({
+        data: {
+          nombre_usuario: data.nombre_usuario,
+          apellidop_usuario: data.apellidop_usuario,
+          apellidom_usuario: data.apellidom_usuario,
+          correo_usuario: data.correo_usuario,
+          contrasena_usuario: data.contrasena_usuario,
+          telefono_usuario: data.telefono_usuario,
+          usuario_rol: {
+            create: {
+              id_rol: data.id_rol
+            }
+          }
+        },
+        include: { usuario_rol: { include: { roles: true } } }
+      });
 
-      const result = await this.databaseService.query(insertQuery, values);
-      const user = result.rows[0];
+      // @ts-ignore
       delete user.contrasena_usuario;
 
       return {

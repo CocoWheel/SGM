@@ -1,18 +1,21 @@
-import { Injectable } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service'; // Ajusta la ruta a tu BD
+import { Injectable, Logger } from '@nestjs/common';
+import { DatabaseService } from '../database/database.service';
 
 @Injectable()
 export class PlantelesService {
+  private readonly logger = new Logger(PlantelesService.name);
+
   constructor(private readonly db: DatabaseService) {}
 
   async obtenerTodos() {
-    // Traemos el ID y el Nombre para alimentar correctamente el Select/Datalist
-    const query = `
-      SELECT id_plantel, nombre_plantel 
-      FROM Planteles 
-      ORDER BY nombre_plantel ASC;
-    `;
-    const resultado = await this.db.query(query);
-    return resultado.rows;
+    try {
+      return await this.db.planteles.findMany({
+        select: { id_plantel: true, nombre_plantel: true },
+        orderBy: { nombre_plantel: 'asc' }
+      });
+    } catch (error) {
+      this.logger.error('Error al obtener todos los planteles:', error);
+      throw error;
+    }
   }
 }

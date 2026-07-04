@@ -1,5 +1,6 @@
 import { Controller, Post, Body, Get, Query, Res } from '@nestjs/common';
 import { EventosService } from './eventos.service';
+import { CrearEventoDto } from './dto/crear-evento.dto';
 
 @Controller('eventos')
 export class EventosController {
@@ -7,14 +8,15 @@ export class EventosController {
 
   // 1. Quitamos 'agendar' para que escuche directamente en http://localhost:3000/eventos
   @Post() 
-  async crearEvento(@Body() datosFormulario: any) {
-    // Recibe el JSON completo del FormularioEventos.jsx y se lo pasa al servicio
+  async crearEvento(@Body() datosFormulario: CrearEventoDto) {
+    // Recibe el JSON validado y se lo pasa al servicio
     return await this.eventosService.agendarYNotificar(datosFormulario);
   }
 
   @Get()
-  async obtenerEventos() {
-    return await this.eventosService.obtenerTodos();
+  async obtenerEventos(@Query('id_usuario') id_usuario?: string) {
+    const idUsuarioNum = id_usuario ? parseInt(id_usuario) : undefined;
+    return await this.eventosService.obtenerTodos(idUsuarioNum);
   }
 
 

@@ -1,0 +1,378 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model areas {
+  id_area             Int                   @id @default(autoincrement())
+  nombre_area         String                @unique @db.VarChar(255)
+  descripcion_area    String?
+  correocontacto_area String?               @db.VarChar(255)
+  estatus_area        String?               @default("Activo") @db.VarChar(100)
+  responsable_area    String?               @db.VarChar(255)
+  created_at          DateTime?             @default(now()) @db.Timestamp(6)
+  evento_departamento evento_departamento[]
+  eventos             eventos[]
+  usuario_area        usuario_area[]
+}
+
+model asistencia_evento {
+  id_asistencia  Int       @id @default(autoincrement())
+  id_evento      Int
+  id_invitado    Int
+  asistencia     Boolean?  @default(false)
+  fecha_registro DateTime? @default(now()) @db.Timestamp(6)
+  eventos        eventos   @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+  invitados      invitados @relation(fields: [id_invitado], references: [id_invitado], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model bitacora_sistema {
+  id_bitacora          Int       @id @default(autoincrement())
+  id_usuario           Int?
+  accion_bitacora      String?   @db.VarChar(255)
+  descripcion_bitacora String?
+  fecha_bitacora       DateTime? @default(now()) @db.Timestamp(6)
+  usuarios             usuarios? @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model encuestas {
+  id_encuesta          Int                  @id @default(autoincrement())
+  titulo_encuesta      String?              @db.VarChar(255)
+  descripcion_encuesta String?
+  id_evento            Int
+  created_at           DateTime?            @default(now()) @db.Timestamp(6)
+  eventos              eventos              @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+  preguntas_encuesta   preguntas_encuesta[]
+}
+
+model espacios {
+  id_espacio             Int       @id @default(autoincrement())
+  nombre_espacio         String    @db.VarChar(255)
+  capacidad_espacio      Int?
+  ubicacion_espacio      String?
+  descripcion_espacio    String?
+  disponibilidad_espacio String?   @db.VarChar(100)
+  id_plantel             Int
+  created_at             DateTime? @default(now()) @db.Timestamp(6)
+  planteles              planteles @relation(fields: [id_plantel], references: [id_plantel], onDelete: NoAction, onUpdate: NoAction)
+  eventos                eventos[]
+}
+
+model estatus_evento {
+  id_estatus_evento   Int       @id @default(autoincrement())
+  nombre_estatus      String    @unique @db.VarChar(100)
+  descripcion_estatus String?
+  eventos             eventos[]
+}
+
+model estatus_proveedor {
+  id_estatus_proveedor Int           @id @default(autoincrement())
+  nombre_estatus       String        @unique @db.VarChar(100)
+  descripcion_estatus  String?
+  proveedores          proveedores[]
+}
+
+model evento_calendar {
+  id_calendar          Int       @id @default(autoincrement())
+  id_evento            Int
+  google_calendar_id   String?   @db.VarChar(255)
+  sincronizado         Boolean?  @default(false)
+  fecha_sincronizacion DateTime? @db.Timestamp(6)
+  oauth_email          String?   @db.VarChar(255)
+  eventos              eventos   @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model evento_cancelacion {
+  id_cancelacion     Int       @id @default(autoincrement())
+  id_evento          Int
+  id_usuario         Int
+  motivo_cancelacion String
+  fecha_cancelacion  DateTime? @default(now()) @db.Timestamp(6)
+  eventos            eventos   @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+  usuarios           usuarios  @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model evento_configuracion {
+  id_configuracion         Int      @id @default(autoincrement())
+  id_evento                Int
+  requiere_encuesta        Boolean? @default(false)
+  requiere_confirmacion    Boolean? @default(true)
+  permite_cancelacion      Boolean? @default(true)
+  horas_limite_cancelacion Int?     @default(24)
+  eventos                  eventos  @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model evento_departamento {
+  id_evento_departamento Int       @id @default(autoincrement())
+  id_evento              Int
+  id_area                Int
+  estado_apoyo           String?   @default("Pendiente") @db.VarChar(100)
+  comentario_apoyo       String?
+  fecha_respuesta        DateTime? @db.Timestamp(6)
+  areas                  areas     @relation(fields: [id_area], references: [id_area], onDelete: NoAction, onUpdate: NoAction)
+  eventos                eventos   @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model evento_historial {
+  id_historial          Int       @id @default(autoincrement())
+  id_evento             Int
+  id_usuario            Int?
+  accion_historial      String?   @db.VarChar(255)
+  descripcion_historial String?
+  fecha_historial       DateTime? @default(now()) @db.Timestamp(6)
+  eventos               eventos   @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+  usuarios              usuarios? @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model evento_material {
+  id_evento_material         Int        @id @default(autoincrement())
+  id_evento                  Int
+  id_material                Int
+  cantidadsolicitada_eventom Int?       @default(1)
+  eventos                    eventos    @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+  materiales                 materiales @relation(fields: [id_material], references: [id_material], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model eventos {
+  id_evento               Int                    @id @default(autoincrement())
+  nombre_evento           String                 @db.VarChar(255)
+  descripcion_evento      String
+  objetivo_evento         String
+  publicoobjetivo_eventos String?                @db.VarChar(255)
+  fecha_evento            DateTime               @db.Date
+  horainicio_evento       DateTime               @db.Time(6)
+  horafin_evento          DateTime               @db.Time(6)
+  horapreparacion_evento  DateTime?              @db.Time(6)
+  id_prioridad            Int?
+  id_estatus_evento       Int?
+  id_usuario              Int
+  id_plantel              Int
+  id_espacio              Int
+  id_area_solicitante     Int
+  created_at              DateTime?              @default(now()) @db.Timestamp(6)
+  updated_at              DateTime?              @default(now()) @db.Timestamp(6)
+  asistencia_evento       asistencia_evento[]
+  encuestas               encuestas[]
+  evento_calendar         evento_calendar[]
+  evento_cancelacion      evento_cancelacion[]
+  evento_configuracion    evento_configuracion[]
+  evento_departamento     evento_departamento[]
+  evento_historial        evento_historial[]
+  evento_material         evento_material[]
+  areas                   areas                  @relation(fields: [id_area_solicitante], references: [id_area], onDelete: NoAction, onUpdate: NoAction)
+  espacios                espacios               @relation(fields: [id_espacio], references: [id_espacio], onDelete: NoAction, onUpdate: NoAction)
+  estatus_evento          estatus_evento?        @relation(fields: [id_estatus_evento], references: [id_estatus_evento], onDelete: NoAction, onUpdate: NoAction)
+  planteles               planteles              @relation(fields: [id_plantel], references: [id_plantel], onDelete: NoAction, onUpdate: NoAction)
+  prioridades_evento      prioridades_evento?    @relation(fields: [id_prioridad], references: [id_prioridad], onDelete: NoAction, onUpdate: NoAction)
+  usuarios                usuarios               @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction)
+  notificaciones          notificaciones[]
+  proveedor_evento        proveedor_evento[]
+  reportes_evento         reportes_evento[]
+}
+
+model invitados {
+  id_invitado          Int                  @id @default(autoincrement())
+  nombre_invitado      String?              @db.VarChar(255)
+  apellidop_invitado   String?              @db.VarChar(255)
+  apellidom_invitado   String?              @db.VarChar(255)
+  correo_invitado      String?              @db.VarChar(255)
+  telefono_invitado    String?              @db.VarChar(10)
+  institucion_invitado String?
+  tipo_invitado        String?              @db.VarChar(255)
+  created_at           DateTime?            @default(now()) @db.Timestamp(6)
+  asistencia_evento    asistencia_evento[]
+  respuesta_pregunta   respuesta_pregunta[]
+}
+
+model materiales {
+  id_material          Int               @id @default(autoincrement())
+  nombre_material      String            @db.VarChar(255)
+  descripcion_material String?
+  cantidad_material    Int?              @default(0)
+  created_at           DateTime?         @default(now()) @db.Timestamp(6)
+  evento_material      evento_material[]
+}
+
+model notificaciones {
+  id_notificacion         Int                @id @default(autoincrement())
+  titulo_notificacion     String?            @db.VarChar(255)
+  mensaje_notificacion    String?
+  id_tipo_notificacion    Int?
+  fechaenvio_notificacion DateTime?          @default(now()) @db.Timestamp(6)
+  estatus_notificacion    String?            @default("Pendiente") @db.VarChar(100)
+  id_usuario              Int?
+  id_evento               Int?
+  eventos                 eventos?           @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+  tipo_notificacion       tipo_notificacion? @relation(fields: [id_tipo_notificacion], references: [id_tipo_notificacion], onDelete: NoAction, onUpdate: NoAction)
+  usuarios                usuarios?          @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model opciones_pregunta {
+  id_opcion          Int                  @id @default(autoincrement())
+  id_pregunta        Int
+  texto_opcion       String?              @db.VarChar(255)
+  preguntas_encuesta preguntas_encuesta   @relation(fields: [id_pregunta], references: [id_pregunta], onDelete: NoAction, onUpdate: NoAction)
+  respuesta_pregunta respuesta_pregunta[]
+}
+
+model permisos {
+  id_permiso          Int           @id @default(autoincrement())
+  nombre_permiso      String        @unique @db.VarChar(255)
+  descripcion_permiso String?
+  estatus_permiso     String?       @default("Activo") @db.VarChar(100)
+  created_at          DateTime?     @default(now()) @db.Timestamp(6)
+  rol_permiso         rol_permiso[]
+}
+
+model planteles {
+  id_plantel        Int        @id @default(autoincrement())
+  nombre_plantel    String     @db.VarChar(255)
+  direccion_plantel String?
+  telefono_plantel  String?    @db.VarChar(10)
+  estatus_plantel   String?    @default("Activo") @db.VarChar(100)
+  created_at        DateTime?  @default(now()) @db.Timestamp(6)
+  espacios          espacios[]
+  eventos           eventos[]
+}
+
+model preguntas_encuesta {
+  id_pregunta        Int                  @id @default(autoincrement())
+  id_encuesta        Int
+  id_tipo_pregunta   Int
+  pregunta           String
+  obligatoria        Boolean?             @default(true)
+  opciones_pregunta  opciones_pregunta[]
+  encuestas          encuestas            @relation(fields: [id_encuesta], references: [id_encuesta], onDelete: NoAction, onUpdate: NoAction)
+  tipo_pregunta      tipo_pregunta        @relation(fields: [id_tipo_pregunta], references: [id_tipo_pregunta], onDelete: NoAction, onUpdate: NoAction)
+  respuesta_pregunta respuesta_pregunta[]
+}
+
+model prioridades_evento {
+  id_prioridad          Int       @id @default(autoincrement())
+  nombre_prioridad      String    @unique @db.VarChar(100)
+  descripcion_prioridad String?
+  eventos               eventos[]
+}
+
+model proveedor_evento {
+  id_proveedor_evento Int         @id @default(autoincrement())
+  id_proveedor        Int
+  id_evento           Int
+  created_at          DateTime?   @default(now()) @db.Timestamp(6)
+  eventos             eventos     @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+  proveedores         proveedores @relation(fields: [id_proveedor], references: [id_proveedor], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model proveedores {
+  id_proveedor         Int                @id @default(autoincrement())
+  nombre_proveedor     String             @db.VarChar(255)
+  telefono_proveedor   String?            @db.VarChar(10)
+  correo_proveedor     String?            @db.VarChar(255)
+  servicio_proveedor   String?
+  id_estatus_proveedor Int?
+  created_at           DateTime?          @default(now()) @db.Timestamp(6)
+  proveedor_evento     proveedor_evento[]
+  estatus_proveedor    estatus_proveedor? @relation(fields: [id_estatus_proveedor], references: [id_estatus_proveedor], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model reportes_evento {
+  id_reporte           Int       @id @default(autoincrement())
+  titulo_reporte       String?   @db.VarChar(255)
+  descripcion_reportes String?
+  evidencia_reporte    String?
+  fecha_reporte        DateTime? @default(now()) @db.Timestamp(6)
+  id_evento            Int?
+  id_usuario           Int?
+  eventos              eventos?  @relation(fields: [id_evento], references: [id_evento], onDelete: NoAction, onUpdate: NoAction)
+  usuarios             usuarios? @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model respuesta_pregunta {
+  id_respuesta_pregunta Int                @id @default(autoincrement())
+  id_pregunta           Int
+  id_invitado           Int
+  id_opcion             Int?
+  respuesta_texto       String?
+  fecha_respuesta       DateTime?          @default(now()) @db.Timestamp(6)
+  invitados             invitados          @relation(fields: [id_invitado], references: [id_invitado], onDelete: NoAction, onUpdate: NoAction)
+  opciones_pregunta     opciones_pregunta? @relation(fields: [id_opcion], references: [id_opcion], onDelete: NoAction, onUpdate: NoAction)
+  preguntas_encuesta    preguntas_encuesta @relation(fields: [id_pregunta], references: [id_pregunta], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model rol_permiso {
+  id_rol_permiso Int      @id @default(autoincrement())
+  id_rol         Int
+  id_permiso     Int
+  permisos       permisos @relation(fields: [id_permiso], references: [id_permiso], onDelete: NoAction, onUpdate: NoAction)
+  roles          roles    @relation(fields: [id_rol], references: [id_rol], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model roles {
+  id_rol          Int           @id @default(autoincrement())
+  nombre_rol      String        @unique @db.VarChar(255)
+  descripcion_rol String?
+  estatus_rol     String?       @default("Activo") @db.VarChar(100)
+  created_at      DateTime?     @default(now()) @db.Timestamp(6)
+  rol_permiso     rol_permiso[]
+  usuario_rol     usuario_rol[]
+}
+
+model tipo_notificacion {
+  id_tipo_notificacion Int              @id @default(autoincrement())
+  nombre_tipo          String           @unique @db.VarChar(100)
+  descripcion_tipo     String?
+  notificaciones       notificaciones[]
+}
+
+model tipo_pregunta {
+  id_tipo_pregunta   Int                  @id @default(autoincrement())
+  nombre_tipo        String               @unique @db.VarChar(100)
+  descripcion_tipo   String?
+  preguntas_encuesta preguntas_encuesta[]
+}
+
+model usuario_area {
+  id_usuario_area  Int       @id @default(autoincrement())
+  id_usuario       Int
+  id_area          Int
+  fecha_asignacion DateTime? @default(now()) @db.Timestamp(6)
+  areas            areas     @relation(fields: [id_area], references: [id_area], onDelete: NoAction, onUpdate: NoAction)
+  usuarios         usuarios  @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model usuario_rol {
+  id_usuario_rol   Int       @id @default(autoincrement())
+  id_usuario       Int
+  id_rol           Int
+  fecha_asignacion DateTime? @default(now()) @db.Timestamp(6)
+  roles            roles     @relation(fields: [id_rol], references: [id_rol], onDelete: NoAction, onUpdate: NoAction)
+  usuarios         usuarios  @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model usuarios {
+  id_usuario           Int                  @id @default(autoincrement())
+  nombre_usuario       String               @db.VarChar(255)
+  apellidop_usuario    String               @db.VarChar(255)
+  apellidom_usuario    String?              @db.VarChar(255)
+  correo_usuario       String               @unique @db.VarChar(255)
+  contrasena_usuario   String
+  telefono_usuario     String?              @db.VarChar(10)
+  estatus_usuario      String?              @default("Activo") @db.VarChar(100)
+  google_refresh_token String?
+  google_access_token  String?
+  ultimo_login         DateTime?            @db.Timestamp(6)
+  created_at           DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?            @default(now()) @db.Timestamp(6)
+  bitacora_sistema     bitacora_sistema[]
+  evento_cancelacion   evento_cancelacion[]
+  evento_historial     evento_historial[]
+  eventos              eventos[]
+  notificaciones       notificaciones[]
+  reportes_evento      reportes_evento[]
+  usuario_area         usuario_area[]
+  usuario_rol          usuario_rol[]
+}
