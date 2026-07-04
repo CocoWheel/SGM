@@ -308,16 +308,28 @@ export class EventosService {
             ]
         });
 
-        return eventos.map(e => ({
-            ...e,
-            planteles: { nombre_plantel: e.planteles?.nombre_plantel },
-            espacios: { nombre_espacio: e.espacios?.nombre_espacio },
-            responsable_evento: `${e.usuarios?.nombre_usuario} ${e.usuarios?.apellidop_usuario}`,
-            estatus_evento: e.id_estatus_evento === 1 ? 'Pendiente' : (e.id_estatus_evento === 2 ? 'Confirmado' : 'Cancelado'),
-            proveedor_evento: e.evento_departamento.map(d => ({
-                proveedores: { nombre_proveedor: d.areas?.nombre_area } 
-            })),
-            requiere_cobertura: e.evento_departamento.length > 0
-        }));
+        return eventos.map(e => {
+            // Extraer HH:MM de la fecha Prisma para que el frontend lo lea bien
+            const formatearHoraRes = (fecha?: Date | null) => {
+                if (!fecha) return null;
+                return `${String(fecha.getUTCHours()).padStart(2, '0')}:${String(fecha.getUTCMinutes()).padStart(2, '0')}`;
+            };
+
+            return {
+                ...e,
+                fecha_evento: e.fecha_evento ? e.fecha_evento.toISOString().split('T')[0] : null,
+                horainicio_evento: formatearHoraRes(e.horainicio_evento),
+                horafin_evento: formatearHoraRes(e.horafin_evento),
+                horapreparacion_evento: formatearHoraRes(e.horapreparacion_evento),
+                planteles: { nombre_plantel: e.planteles?.nombre_plantel },
+                espacios: { nombre_espacio: e.espacios?.nombre_espacio },
+                responsable_evento: `${e.usuarios?.nombre_usuario} ${e.usuarios?.apellidop_usuario}`,
+                estatus_evento: e.id_estatus_evento === 1 ? 'Pendiente' : (e.id_estatus_evento === 2 ? 'Confirmado' : 'Cancelado'),
+                proveedor_evento: e.evento_departamento.map(d => ({
+                    proveedores: { nombre_proveedor: d.areas?.nombre_area } 
+                })),
+                requiere_cobertura: e.evento_departamento.length > 0
+            };
+        });
     }
 }

@@ -24,9 +24,16 @@ export class AuthService {
       // @ts-ignore
       delete user.contrasena_usuario;
 
+      // Map role to root object for frontend compatibility
+      const mappedUser = {
+        ...user,
+        id_rol: user.usuario_rol?.[0]?.id_rol || null,
+        nombre_rol: user.usuario_rol?.[0]?.roles?.nombre_rol || null
+      };
+
       return {
         message: 'Login exitoso',
-        user: user,
+        user: mappedUser,
       };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -67,9 +74,16 @@ export class AuthService {
       // @ts-ignore
       delete user.contrasena_usuario;
 
+      // Map role to root object for frontend compatibility
+      const mappedUser = {
+        ...user,
+        id_rol: user.usuario_rol?.[0]?.id_rol || null,
+        nombre_rol: user.usuario_rol?.[0]?.roles?.nombre_rol || null
+      };
+
       return {
         message: 'Cuenta creada exitosamente',
-        user: user,
+        user: mappedUser,
       };
     } catch (error) {
       if (error instanceof HttpException) {
