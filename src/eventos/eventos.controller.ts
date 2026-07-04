@@ -1,19 +1,27 @@
-import { Controller, Post, Body, Get, Query, Res } from '@nestjs/common'; //  Agregamos Get, Query y Res
+import { Controller, Post, Body, Get, Query, Res } from '@nestjs/common';
 import { EventosService } from './eventos.service';
-import { Response } from 'express'; //  Importación necesaria para el redireccionamiento corporativo
+import { CrearEventoDto } from './dto/crear-evento.dto';
 
 @Controller('eventos')
 export class EventosController {
   constructor(private readonly eventosService: EventosService) {}
 
-  @Post('agendar')
-  async crearEvento(@Body() datosFormulario: any) {
-    // Recibe el JSON del frontend y se lo pasa al servicio
+  // 1. Quitamos 'agendar' para que escuche directamente en http://localhost:3000/eventos
+  @Post() 
+  async crearEvento(@Body() datosFormulario: CrearEventoDto) {
+    // Recibe el JSON validado y se lo pasa al servicio
     return await this.eventosService.agendarYNotificar(datosFormulario);
   }
 
+  @Get()
+  async obtenerEventos(@Query('id_usuario') id_usuario?: string) {
+    const idUsuarioNum = id_usuario ? parseInt(id_usuario) : undefined;
+    return await this.eventosService.obtenerTodos(idUsuarioNum);
+  }
+
+
   /**
-   * 1. Genera la URL oficial de Google para iniciar sesión.
+   * 2. Genera la URL oficial de Google para iniciar sesión.
    * Tu Frontend pasará el ID del usuario logueado en la app: GET http://localhost:3000/eventos/google/url?id_usuario=5
    */
   @Get('google/url')
@@ -24,12 +32,12 @@ export class EventosController {
   }
 
   /**
-   * 2. Callback de Google. Aquí regresa el control con el código y el state (id_usuario).
+   * 3. Callback de Google. Aquí regresa el control con el código y el state (id_usuario).
    */
   @Get('google/callback')
   async googleCallback(
     @Query('code') code: string, 
-    @Query('state') state: string, //  Google nos devuelve aquí el id_usuario que inyectamos
+    @Query('state') state: string, // Google nos devuelve aquí el id_usuario que inyectamos
     @Res() res: any
   ) {
     try {

@@ -6,6 +6,10 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MailModule } from './mail/mail.module';
 import { EventosModule } from './eventos/eventos.module';
+import { PlantelesModule } from './planteles/planteles.module';
+import { EspaciosModule } from './espacios/espacios.module';
+import { ProveedoresModule } from './proveedores/proveedores.module';
+import { AreasModule } from './areas/areas.module';
 import { AuthModule } from './auth/auth.module';
 
 @Module({
@@ -17,6 +21,10 @@ import { AuthModule } from './auth/auth.module';
     DatabaseModule,
     MailModule,
     EventosModule,
+    PlantelesModule,
+    EspaciosModule,
+    ProveedoresModule,
+    AreasModule,
     AuthModule,
   ],
   controllers: [AppController],
