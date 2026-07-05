@@ -1,4 +1,5 @@
-import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
+import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Matches, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CrearEventoDto {
   @IsString()
@@ -59,5 +60,76 @@ export class CrearEventoDto {
   @IsArray()
   @IsInt({ each: true })
   @IsOptional()
-  ids_areas_apoyo?: number[];
+  proveedoresIds?: number[];
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => InvitadoDto)
+  invitados?: InvitadoDto[];
+
+  @IsString()
+  @IsOptional()
+  fotografiaResena?: string;
+
+  @IsString()
+  @IsOptional()
+  apoyoAcceso?: string;
+
+  @IsString()
+  @IsOptional()
+  apoyoMantenimiento?: string;
+
+  @IsString()
+  @IsOptional()
+  Mantenimiento?: string;
+
+  @IsString()
+  @IsOptional()
+  apoyoAudiovisual?: string;
+
+  @IsOptional()
+  equiposAudiovisuales?: any;
+
+  @IsString()
+  @IsOptional()
+  estatus?: string;
+
+  @IsString()
+  @IsOptional()
+  responsable?: string;
+
+  @IsString()
+  @IsOptional()
+  publico?: string;
+}
+
+export class InvitadoDto {
+  @IsString()
+  @IsOptional()
+  nombre?: string;
+
+  @IsString()
+  @IsOptional()
+  apellidoPaterno?: string;
+
+  @IsString()
+  @IsOptional()
+  apellidoMaterno?: string;
+
+  @IsString()
+  @IsOptional()
+  correo?: string;
+
+  @IsString()
+  @IsOptional()
+  telefono?: string;
+
+  @IsString()
+  @IsOptional()
+  institucion?: string;
+
+  @IsString()
+  @IsOptional()
+  nivelAutoridad?: string;
 }
