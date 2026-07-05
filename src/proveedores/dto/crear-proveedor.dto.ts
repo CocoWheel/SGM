@@ -8,4 +8,12 @@ export class CrearProveedorDto {
   @IsEmail({}, { message: 'El correo debe ser válido' })
   @IsOptional()
   correo_proveedor?: string;
+
+  @IsString()
+  @IsOptional()
+  telefono_proveedor?: string;
+
+  @IsString()
+  @IsOptional()
+  servicio_proveedor?: string;
 }

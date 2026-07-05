@@ -11,7 +11,6 @@ export class ProveedoresService {
   async obtenerTodos() {
     try {
       return await this.db.proveedores.findMany({
-        select: { id_proveedor: true, nombre_proveedor: true, correo_proveedor: true },
         orderBy: { nombre_proveedor: 'asc' }
       });
     } catch (error) {
@@ -21,16 +20,14 @@ export class ProveedoresService {
   }
 
   // 2. Para cuando el Admin crea un proveedor nuevo desde el formulario
-  async crear(nombre: string, correo: string) {
+  async crear(nombre: string, correo: string, telefono: string, servicio: string) {
     try {
       return await this.db.proveedores.create({
         data: {
           nombre_proveedor: nombre,
-          correo_proveedor: correo
-        },
-        select: {
-          id_proveedor: true,
-          nombre_proveedor: true
+          correo_proveedor: correo,
+          telefono_proveedor: telefono,
+          servicio_proveedor: servicio
         }
       });
     } catch (error) {
