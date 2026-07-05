@@ -436,6 +436,9 @@ export class EventosService {
         proveedor_evento: {
           include: { proveedores: true },
         },
+        asistencia_evento: {
+          include: { invitados: true },
+        }
       },
       orderBy: [{ fecha_evento: 'asc' }, { horainicio_evento: 'asc' }],
     });
@@ -467,8 +470,229 @@ export class EventosService {
         proveedor_evento: e.proveedor_evento.map((d) => ({
           proveedores: { nombre_proveedor: d.proveedores?.nombre_proveedor },
         })),
-        requiere_cobertura: e.proveedor_evento.length > 0,
+        requiere_cobertura: e.proveedor_evento.length > 0 || e.fotografia_resena === true,
       };
     });
+  }
+
+  async asignarCobertura(id_evento: number, proveedoresIds: number[], id_usuario: number) {
+    try {
+      if (!id_usuario) {
+        throw new HttpException('Usuario no autorizado.', HttpStatus.UNAUTHORIZED);
+      }
+
+      const user = await this.db.usuarios.findUnique({
+        where: { id_usuario },
+        include: { usuario_rol: { include: { roles: true } } },
+      });
+
+      const isAuthorized = user?.usuario_rol.some(
+        (ur) => ur.roles.nombre_rol.toLowerCase() === 'root' || ur.roles.nombre_rol.toLowerCase() === 'administrador'
+      );
+
+      if (!isAuthorized) {
+        throw new HttpException(
+          'No tienes permisos para asignar cobertura. Solo Administradores o Root pueden hacerlo.',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      // Create entries in proveedor_evento
+      const proveedoresCreate = proveedoresIds.map((id_proveedor) => ({
+        id_proveedor,
+      }));
+
+      // We might want to remove existing providers first, or simply append.
+      // Assuming it's an assignment that overwrites:
+      await this.db.proveedor_evento.deleteMany({
+        where: { id_evento },
+      });
+
+      if (proveedoresIds.length > 0) {
+        await this.db.eventos.update({
+          where: { id_evento },
+          data: {
+            proveedor_evento: {
+              create: proveedoresCreate,
+            }
+          }
+        });
+      }
+
+      return {
+        exito: true,
+        mensaje: 'Cobertura asignada exitosamente.',
+      };
+    } catch (error: any) {
+      this.logger.error(`Error al asignar cobertura: ${error.message}`);
+      throw new HttpException(
+        `Error al asignar cobertura: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async actualizarEvento(id_evento: number, datosFormulario: CrearEventoDto) {
+    const {
+      nombre,
+      comentarios,
+      objetivo,
+      publicoobjetivo_eventos = 'Comunidad Universitaria',
+      fecha,
+      hora,
+      horaFin,
+      horaApartado,
+      prioridad,
+      plantel,
+      area,
+      invitados = [],
+      fotografiaResena,
+      apoyoAcceso,
+      apoyoMantenimiento,
+      Mantenimiento,
+      apoyoAudiovisual,
+      equiposAudiovisuales,
+      estatus
+    } = datosFormulario;
+
+    // Convertir strings a Date para Prisma
+    const fechaObj = new Date(`${fecha}T00:00:00.000Z`);
+    const horaInicioObj = new Date(`1970-01-01T${hora}:00.000Z`);
+    const horaFinObj = new Date(`1970-01-01T${horaFin}:00.000Z`);
+    const horaApartadoObj = horaApartado
+      ? new Date(`1970-01-01T${horaApartado}:00.000Z`)
+      : null;
+
+    try {
+      // Buscar o crear el Plantel
+      let id_plantel = 1;
+      if (plantel) {
+        const resPlantel = await this.db.planteles.findFirst({
+          where: { nombre_plantel: plantel },
+        });
+        if (resPlantel) {
+          id_plantel = resPlantel.id_plantel;
+        } else {
+          const insertPlantel = await this.db.planteles.create({
+            data: { nombre_plantel: plantel },
+          });
+          id_plantel = insertPlantel.id_plantel;
+        }
+      }
+
+      // Buscar o crear el Espacio
+      let id_espacio = 1;
+      if (area) {
+        const resEspacio = await this.db.espacios.findFirst({
+          where: { nombre_espacio: area },
+        });
+        if (resEspacio) {
+          id_espacio = resEspacio.id_espacio;
+        } else {
+          const insertEspacio = await this.db.espacios.create({
+            data: { nombre_espacio: area, id_plantel: id_plantel },
+          });
+          id_espacio = insertEspacio.id_espacio;
+        }
+      }
+
+      let id_prioridad = 2;
+      const prioridadTexto = prioridad || 'Media';
+      const resPrioridad = await this.db.prioridades_evento.findFirst({
+        where: { nombre_prioridad: prioridadTexto },
+      });
+      if (resPrioridad) {
+        id_prioridad = resPrioridad.id_prioridad;
+      } else {
+        const insertPrioridad = await this.db.prioridades_evento.create({
+          data: { nombre_prioridad: prioridadTexto },
+        });
+        id_prioridad = insertPrioridad.id_prioridad;
+      }
+
+      let id_estatus_evento = 1; // Default pendiente
+      if (estatus) {
+        const est = estatus.toLowerCase();
+        if (est === 'confirmado') id_estatus_evento = 2;
+        else if (est === 'cancelado') id_estatus_evento = 3;
+      }
+
+      // Procesar equipos audiovisuales
+      const mapeoEquipos: Record<string, string> = {
+        equ1: 'Sonido',
+        equ2: 'Audio para presentación',
+        equ3: 'Micrófono',
+        equ4: 'Pantalla',
+      };
+      const equiposAudiovisualesArr = equiposAudiovisuales
+        ? Object.keys(equiposAudiovisuales)
+            .filter((key) => equiposAudiovisuales[key])
+            .map((key) => mapeoEquipos[key] || key)
+        : [];
+
+      // Delete existing invitados
+      await this.db.asistencia_evento.deleteMany({
+        where: { id_evento },
+      });
+
+      // Procesar invitados
+      const invitadosCreate = invitados
+        ? invitados.map((inv) => ({
+            invitados: {
+              create: {
+                nombre_invitado: inv.nombre || '',
+                apellidop_invitado: inv.apellidoPaterno || '',
+                apellidom_invitado: inv.apellidoMaterno || '',
+                correo_invitado: inv.correo || '',
+                telefono_invitado: inv.telefono || '',
+                institucion_invitado: inv.institucion || '',
+                tipo_invitado: inv.nivelAutoridad || '',
+              },
+            },
+          }))
+        : [];
+
+      // Update Evento
+      const eventoActualizado = await this.db.eventos.update({
+        where: { id_evento },
+        data: {
+          nombre_evento: nombre,
+          descripcion_evento: comentarios || '',
+          objetivo_evento: objetivo,
+          publicoobjetivo_eventos: publicoobjetivo_eventos,
+          fecha_evento: fechaObj,
+          horainicio_evento: horaInicioObj,
+          horafin_evento: horaFinObj,
+          horapreparacion_evento: horaApartadoObj,
+          id_prioridad,
+          id_estatus_evento,
+          id_plantel,
+          id_espacio,
+          fotografia_resena: fotografiaResena === 'si',
+          apoyo_acceso: apoyoAcceso === 'si',
+          apoyo_mantenimiento: apoyoMantenimiento === 'si',
+          detalles_mantenimiento: Mantenimiento || null,
+          apoyo_audiovisual: apoyoAudiovisual === 'si',
+          equipos_audiovisuales: equiposAudiovisualesArr,
+          asistencia_evento: {
+            create: invitadosCreate,
+          },
+        },
+      });
+
+      return {
+        exito: true,
+        mensaje: 'Evento actualizado con éxito.',
+        id_evento: eventoActualizado.id_evento,
+      };
+    } catch (dbError: any) {
+      this.logger.error(
+        ` CRÍTICO - Error de Prisma al actualizar evento: ${dbError.message}`,
+      );
+      throw new HttpException(
+        `Error en BD: ${dbError.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

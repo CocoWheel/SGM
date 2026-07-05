@@ -11,6 +11,7 @@ import { EspaciosModule } from './espacios/espacios.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
 import { AreasModule } from './areas/areas.module';
 import { AuthModule } from './auth/auth.module';
+import { MaterialesModule } from './materiales/materiales.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AuthModule } from './auth/auth.module';
     ProveedoresModule,
     AreasModule,
     AuthModule,
+    MaterialesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

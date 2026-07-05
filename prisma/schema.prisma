@@ -199,6 +199,7 @@ model materiales {
   nombre_material      String            @db.VarChar(255)
   descripcion_material String?
   cantidad_material    Int?              @default(0)
+  imagen_material      String?
   created_at           DateTime?         @default(now()) @db.Timestamp(6)
   evento_material      evento_material[]
 }
