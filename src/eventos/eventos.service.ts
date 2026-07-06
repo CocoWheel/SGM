@@ -433,6 +433,7 @@ export class EventosService {
         planteles: true,
         espacios: true,
         usuarios: true,
+        estatus_evento: true,
         proveedor_evento: {
           include: { proveedores: true },
         },
@@ -461,12 +462,7 @@ export class EventosService {
         planteles: { nombre_plantel: e.planteles?.nombre_plantel },
         espacios: { nombre_espacio: e.espacios?.nombre_espacio },
         responsable_evento: `${e.usuarios?.nombre_usuario} ${e.usuarios?.apellidop_usuario}`,
-        estatus_evento:
-          e.id_estatus_evento === 1
-            ? 'Pendiente'
-            : e.id_estatus_evento === 2
-              ? 'Confirmado'
-              : 'Cancelado',
+        estatus_evento: e.estatus_evento?.nombre_estatus || 'Pendiente',
         proveedor_evento: e.proveedor_evento.map((d) => ({
           proveedores: { nombre_proveedor: d.proveedores?.nombre_proveedor },
         })),
@@ -475,7 +471,7 @@ export class EventosService {
     });
   }
 
-  async asignarCobertura(id_evento: number, proveedoresIds: number[], id_usuario: number) {
+  async asignarCobertura(id_evento: number, proveedoresIds: number[], id_usuario: number, prioridad?: string, estatus?: string) {
     try {
       if (!id_usuario) {
         throw new HttpException('Usuario no autorizado.', HttpStatus.UNAUTHORIZED);
@@ -497,6 +493,34 @@ export class EventosService {
         );
       }
 
+      // Update estatus and prioridad
+      let dataToUpdate: any = {};
+      
+      if (prioridad) {
+        let resPrioridad = await this.db.prioridades_evento.findFirst({
+          where: { nombre_prioridad: prioridad },
+        });
+        if (!resPrioridad) {
+          resPrioridad = await this.db.prioridades_evento.create({
+            data: { nombre_prioridad: prioridad },
+          });
+        }
+        dataToUpdate.id_prioridad = resPrioridad.id_prioridad;
+      }
+      
+      if (estatus) {
+        const est = estatus.charAt(0).toUpperCase() + estatus.slice(1).toLowerCase();
+        let resEstatus = await this.db.estatus_evento.findFirst({
+          where: { nombre_estatus: est },
+        });
+        if (!resEstatus) {
+          resEstatus = await this.db.estatus_evento.create({
+            data: { nombre_estatus: est },
+          });
+        }
+        dataToUpdate.id_estatus_evento = resEstatus.id_estatus_evento;
+      }
+
       // Create entries in proveedor_evento
       const proveedoresCreate = proveedoresIds.map((id_proveedor) => ({
         id_proveedor,
@@ -509,13 +533,15 @@ export class EventosService {
       });
 
       if (proveedoresIds.length > 0) {
+        dataToUpdate.proveedor_evento = {
+          create: proveedoresCreate,
+        };
+      }
+      
+      if (Object.keys(dataToUpdate).length > 0) {
         await this.db.eventos.update({
           where: { id_evento },
-          data: {
-            proveedor_evento: {
-              create: proveedoresCreate,
-            }
-          }
+          data: dataToUpdate
         });
       }
 
@@ -612,9 +638,16 @@ export class EventosService {
 
       let id_estatus_evento = 1; // Default pendiente
       if (estatus) {
-        const est = estatus.toLowerCase();
-        if (est === 'confirmado') id_estatus_evento = 2;
-        else if (est === 'cancelado') id_estatus_evento = 3;
+        const est = estatus.charAt(0).toUpperCase() + estatus.slice(1).toLowerCase();
+        let resEstatus = await this.db.estatus_evento.findFirst({
+          where: { nombre_estatus: est },
+        });
+        if (!resEstatus) {
+          resEstatus = await this.db.estatus_evento.create({
+            data: { nombre_estatus: est },
+          });
+        }
+        id_estatus_evento = resEstatus.id_estatus_evento;
       }
 
       // Procesar equipos audiovisuales

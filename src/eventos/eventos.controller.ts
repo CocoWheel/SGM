@@ -1,64 +1,43 @@
 import { Controller, Post, Body, Get, Query, Res, Patch, Param, ParseIntPipe, Delete } from '@nestjs/common';
 import { EventosService } from './eventos.service';
-import { CrearEventoDto } from './dto/crear-evento.dto';
 
 @Controller('eventos')
 export class EventosController {
   constructor(private readonly eventosService: EventosService) {}
 
-  // 1. Quitamos 'agendar' para que escuche directamente en http://localhost:3000/eventos
+  // 1. Crear un evento desde el formulario del Frontend
   @Post() 
-  async crearEvento(@Body() datosFormulario: CrearEventoDto) {
-    // Recibe el JSON validado y se lo pasa al servicio
+  async crearEvento(@Body() datosFormulario: any) {
     return await this.eventosService.agendarYNotificar(datosFormulario);
   }
 
+  // 2. Editar un evento existente
   @Patch(':id')
   async editarEvento(
     @Param('id', ParseIntPipe) id_evento: number,
-    @Body() datosFormulario: CrearEventoDto
+    @Body() datosFormulario: any
   ) {
     return await this.eventosService.actualizarEvento(id_evento, datosFormulario);
   }
 
-  @Delete(':id')
-  async eliminarEvento(@Param('id', ParseIntPipe) id_evento: number) {
-    return await this.eventosService.eliminarEvento(id_evento);
-  }
-
+  // 3. Obtener todos los eventos (opcionalmente por usuario)
   @Get()
   async obtenerEventos(@Query('id_usuario') id_usuario?: string) {
     const idUsuarioNum = id_usuario ? parseInt(id_usuario) : undefined;
     return await this.eventosService.obtenerTodos(idUsuarioNum);
   }
 
+  // 4. Asignar cobertura de proveedores a un evento
   @Patch(':id/cobertura')
   async asignarCobertura(
     @Param('id', ParseIntPipe) id_evento: number,
-    @Body() data: { proveedoresIds: number[], id_usuario: number }
+    @Body() data: { proveedoresIds: number[], id_usuario: number, prioridad?: string, estatus?: string }
   ) {
-    return await this.eventosService.asignarCobertura(id_evento, data.proveedoresIds, data.id_usuario);
+    return await this.eventosService.asignarCobertura(id_evento, data.proveedoresIds, data.id_usuario, data.prioridad, data.estatus);
   }
-
-  @Post(':id/asistencia')
-  async registrarAsistencia(
-    @Param('id', ParseIntPipe) id_evento: number,
-    @Body() datos: any
-  ) {
-    return await this.eventosService.registrarAsistencia(id_evento, datos);
-  }
-
-  @Post(':id/encuesta')
-  async registrarEncuesta(
-    @Param('id', ParseIntPipe) id_evento: number,
-    @Body() datos: any
-  ) {
-    return await this.eventosService.registrarEncuesta(id_evento, datos);
-  }
-
 
   /**
-   * 2. Genera la URL oficial de Google para iniciar sesión.
+   * 5. Genera la URL oficial de Google para iniciar sesión.
    * Tu Frontend pasará el ID del usuario logueado en la app: GET http://localhost:3000/eventos/google/url?id_usuario=5
    */
   @Get('google/url')
@@ -69,7 +48,7 @@ export class EventosController {
   }
 
   /**
-   * 3. Callback de Google. Aquí regresa el control con el código y el state (id_usuario).
+   * 6. Callback de Google. Aquí regresa el control con el código y el state (id_usuario).
    */
   @Get('google/callback')
   async googleCallback(
@@ -85,11 +64,11 @@ export class EventosController {
       const idUsuario = state ? parseInt(state) : 1;
       await this.eventosService.guardarTokensDeUsuario(idUsuario, tokens); 
 
-      // Una vez guardado todo con éxito, mandamos al usuario de vuelta a la interfaz del Frontend
-      return res.redirect('http://localhost:5173/dashboard?google=success');
+      // Redirige a la ruta correcta del Dashboard en el Frontend
+      return res.redirect('http://localhost:5173/eventos/dashboard?google=success');
     } catch (error: any) {
-      // Si algo falla, redirige con un parámetro de error para avisarle al usuario
-      return res.redirect('http://localhost:5173/dashboard?google=error');
+      // Redirige indicando el fallo en caso de error
+      return res.redirect('http://localhost:5173/eventos/dashboard?google=error');
     }
   }
 }
