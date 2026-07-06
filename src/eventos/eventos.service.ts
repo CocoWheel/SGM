@@ -338,6 +338,9 @@ export class EventosService {
         proveedor_evento: {
           include: { proveedores: true },
         },
+        asistencia_evento: {
+          include: { invitados: true },
+        },
       },
     });
 
@@ -365,7 +368,9 @@ export class EventosService {
       infoEventoCompleto,
       textoAreas,
     );
-    await this.mailService.enviarInvitacionImanol(infoEventoCompleto);
+    
+    const invitadosDelEvento = rawEvento.asistencia_evento?.map((a) => a.invitados) || [];
+    await this.mailService.enviarInvitacionesInvitados(infoEventoCompleto, invitadosDelEvento);
 
     for (const area of areasAsignadas) {
       if (area.correo_proveedor) {

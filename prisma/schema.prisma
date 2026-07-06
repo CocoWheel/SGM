@@ -153,14 +153,14 @@ model eventos {
   id_plantel              Int
   id_espacio              Int
   id_area_solicitante     Int
-  fotografia_resena       Boolean?               @default(false)
-  apoyo_acceso            Boolean?               @default(false)
-  apoyo_mantenimiento     Boolean?               @default(false)
-  detalles_mantenimiento  String?
-  apoyo_audiovisual       Boolean?               @default(false)
-  equipos_audiovisuales   String[]
   created_at              DateTime?              @default(now()) @db.Timestamp(6)
   updated_at              DateTime?              @default(now()) @db.Timestamp(6)
+  apoyo_acceso            Boolean?               @default(false)
+  apoyo_audiovisual       Boolean?               @default(false)
+  apoyo_mantenimiento     Boolean?               @default(false)
+  detalles_mantenimiento  String?
+  equipos_audiovisuales   String[]
+  fotografia_resena       Boolean?               @default(false)
   asistencia_evento       asistencia_evento[]
   encuestas               encuestas[]
   evento_calendar         evento_calendar[]
@@ -199,8 +199,8 @@ model materiales {
   nombre_material      String            @db.VarChar(255)
   descripcion_material String?
   cantidad_material    Int?              @default(0)
-  imagen_material      String?
   created_at           DateTime?         @default(now()) @db.Timestamp(6)
+  imagen_material      String?
   evento_material      evento_material[]
 }
 

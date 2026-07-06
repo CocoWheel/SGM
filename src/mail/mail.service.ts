@@ -124,32 +124,37 @@ export class MailService {
     });
   }
 
-  async enviarInvitacionImanol(evento: any) {
-    try {
-      const imanolEmail = process.env.EMAIL_IMANOL || 'imanolaguilare@gmail.com';
+  async enviarInvitacionesInvitados(evento: any, invitados: any[]) {
+    if (!invitados || invitados.length === 0) return;
+
+    for (const invitado of invitados) {
+      if (!invitado.correo_invitado) continue;
       
-      let fechaStr = evento.fecha_evento;
-      if (fechaStr instanceof Date) {
-        const yyyy = fechaStr.getFullYear();
-        const mm = String(fechaStr.getMonth() + 1).padStart(2, '0');
-        const dd = String(fechaStr.getDate()).padStart(2, '0');
-        fechaStr = `${yyyy}-${mm}-${dd}`;
-      } else if (typeof fechaStr === 'string' && fechaStr.includes('T')) {
-        fechaStr = fechaStr.split('T')[0];
-      }
+      try {
+        const correo = invitado.correo_invitado;
+        
+        let fechaStr = evento.fecha_evento;
+        if (fechaStr instanceof Date) {
+          const yyyy = fechaStr.getFullYear();
+          const mm = String(fechaStr.getMonth() + 1).padStart(2, '0');
+          const dd = String(fechaStr.getDate()).padStart(2, '0');
+          fechaStr = `${yyyy}-${mm}-${dd}`;
+        } else if (typeof fechaStr === 'string' && fechaStr.includes('T')) {
+          fechaStr = fechaStr.split('T')[0];
+        }
 
-      const horaInicioStr = (evento.horainicio_evento || '00:00').length === 5 ? `${evento.horainicio_evento}:00` : evento.horainicio_evento;
-      const horaFinStr = (evento.horafin_evento || '00:00').length === 5 ? `${evento.horafin_evento}:00` : evento.horafin_evento;
+        const horaInicioStr = (evento.horainicio_evento || '00:00').length === 5 ? `${evento.horainicio_evento}:00` : evento.horainicio_evento;
+        const horaFinStr = (evento.horafin_evento || '00:00').length === 5 ? `${evento.horafin_evento}:00` : evento.horafin_evento;
 
-      const fechaInicio = new Date(`${fechaStr}T${horaInicioStr}-06:00`);
-      const fechaFin = new Date(`${fechaStr}T${horaFinStr}-06:00`);
+        const fechaInicio = new Date(`${fechaStr}T${horaInicioStr}-06:00`);
+        const fechaFin = new Date(`${fechaStr}T${horaFinStr}-06:00`);
 
-      const formatDateForIcal = (date: Date) => {
-        if (isNaN(date.getTime())) return new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-        return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-      };
+        const formatDateForIcal = (date: Date) => {
+          if (isNaN(date.getTime())) return new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+          return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        };
 
-      const icalContent = `BEGIN:VCALENDAR
+        const icalContent = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//SGM//Sistema de Gestion Madero//ES
 CALSCALE:GREGORIAN
@@ -163,35 +168,36 @@ SUMMARY:${evento.nombre_evento}
 DESCRIPTION:${evento.descripcion_evento || ''}
 LOCATION:${evento.nombre_espacio || 'Campus Universitario'}
 ORGANIZER;CN="Sistema SGM":mailto:${process.env.EMAIL_USER}
-ATTENDEE;RSVP=TRUE:mailto:${imanolEmail}
+ATTENDEE;RSVP=TRUE:mailto:${correo}
 END:VEVENT
 END:VCALENDAR`;
 
-      const html = `
-        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-          <h2 style="color: #4285f4;"> Nuevo Evento Agendado</h2>
-          <p>Se ha registrado un nuevo evento en el sistema.</p>
-          <p><strong>Evento:</strong> ${evento.nombre_evento}<br>
-          <strong>Descripción:</strong> ${evento.descripcion_evento}<br>
-          <strong>Fecha:</strong> ${fechaStr}<br>
-          <strong>Horario:</strong> ${horaInicioStr} - ${horaFinStr}<br>
-          <strong>Espacio:</strong> ${evento.nombre_espacio || 'Por asignar'}</p>
-          <p>Se adjunta la invitación para tu calendario.</p>
-        </div>
-      `;
+        const html = `
+          <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+            <h2 style="color: #4285f4;"> Nuevo Evento Agendado</h2>
+            <p>Hola ${invitado.nombre_invitado || ''}, se ha registrado un nuevo evento en el sistema.</p>
+            <p><strong>Evento:</strong> ${evento.nombre_evento}<br>
+            <strong>Descripción:</strong> ${evento.descripcion_evento}<br>
+            <strong>Fecha:</strong> ${fechaStr}<br>
+            <strong>Horario:</strong> ${horaInicioStr} - ${horaFinStr}<br>
+            <strong>Espacio:</strong> ${evento.nombre_espacio || 'Por asignar'}</p>
+            <p>Se adjunta la invitación para tu calendario.</p>
+          </div>
+        `;
 
-      await this.send({
-        to: imanolEmail,
-        subject: `[SGM] Invitación a Evento: ${evento.nombre_evento}`,
-        html,
-        icalEvent: {
-          filename: 'invitacion.ics',
-          method: 'request',
-          content: icalContent
-        }
-      });
-    } catch (e: any) {
-      this.logger.error(` Error al preparar invitación a Imanol: ${e.message}`);
+        await this.send({
+          to: correo,
+          subject: `[SGM] Invitación a Evento: ${evento.nombre_evento}`,
+          html,
+          icalEvent: {
+            filename: 'invitacion.ics',
+            method: 'request',
+            content: icalContent
+          }
+        });
+      } catch (e: any) {
+        this.logger.error(` Error al preparar invitación a invitado ${invitado.correo_invitado}: ${e.message}`);
+      }
     }
   }
 
