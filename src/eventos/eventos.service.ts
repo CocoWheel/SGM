@@ -695,4 +695,188 @@ export class EventosService {
       );
     }
   }
+
+  async registrarAsistencia(id_evento: number, datos: any) {
+    try {
+      const { nombre, semestre, carrera } = datos;
+      
+      const nuevoInvitado = await this.db.invitados.create({
+        data: {
+          nombre_invitado: nombre,
+          institucion_invitado: `Semestre: ${semestre}, Carrera: ${carrera}`,
+          tipo_invitado: 'Asistente',
+        }
+      });
+
+      await this.db.asistencia_evento.create({
+        data: {
+          id_evento: id_evento,
+          id_invitado: nuevoInvitado.id_invitado,
+          asistencia: true,
+        }
+      });
+
+      return { exito: true, mensaje: 'Asistencia registrada correctamente.' };
+    } catch (error: any) {
+      this.logger.error(`Error al registrar asistencia: ${error.message}`);
+      throw new HttpException('Error al registrar asistencia', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async registrarEncuesta(id_evento: number, datos: any) {
+    try {
+      const { correo, calificacion, comentarios, recomendacion } = datos;
+
+      let invitado = await this.db.invitados.findFirst({
+        where: { correo_invitado: correo }
+      });
+      if (!invitado) {
+        invitado = await this.db.invitados.create({
+          data: {
+            correo_invitado: correo,
+            nombre_invitado: 'Asistente (Encuesta)',
+          }
+        });
+      }
+
+      let encuesta = await this.db.encuestas.findFirst({
+        where: { id_evento }
+      });
+      if (!encuesta) {
+        encuesta = await this.db.encuestas.create({
+          data: {
+            id_evento,
+            titulo_encuesta: 'Encuesta de Satisfacción',
+          }
+        });
+      }
+
+      let tipoPregunta = await this.db.tipo_pregunta.findFirst();
+      if (!tipoPregunta) {
+        tipoPregunta = await this.db.tipo_pregunta.create({
+          data: { nombre_tipo: 'Texto Abierto' }
+        });
+      }
+
+      const getOrCreatePregunta = async (preguntaTexto: string) => {
+        let preg = await this.db.preguntas_encuesta.findFirst({
+          where: { id_encuesta: encuesta!.id_encuesta, pregunta: preguntaTexto }
+        });
+        if (!preg) {
+          preg = await this.db.preguntas_encuesta.create({
+            data: {
+              id_encuesta: encuesta!.id_encuesta,
+              id_tipo_pregunta: tipoPregunta!.id_tipo_pregunta,
+              pregunta: preguntaTexto
+            }
+          });
+        }
+        return preg;
+      };
+
+      const pregCalificacion = await getOrCreatePregunta('Calificación General');
+      const pregComentarios = await getOrCreatePregunta('Comentarios');
+      const pregRecomendacion = await getOrCreatePregunta('Recomendación');
+
+      await this.db.respuesta_pregunta.createMany({
+        data: [
+          {
+            id_pregunta: pregCalificacion.id_pregunta,
+            id_invitado: invitado.id_invitado,
+            respuesta_texto: calificacion.toString()
+          },
+          {
+            id_pregunta: pregComentarios.id_pregunta,
+            id_invitado: invitado.id_invitado,
+            respuesta_texto: comentarios
+          },
+          {
+            id_pregunta: pregRecomendacion.id_pregunta,
+            id_invitado: invitado.id_invitado,
+            respuesta_texto: recomendacion
+          }
+        ]
+      });
+
+      return { exito: true, mensaje: 'Encuesta registrada correctamente.' };
+    } catch (error: any) {
+      this.logger.error(`Error al registrar encuesta: ${error.message}`);
+      throw new HttpException('Error al registrar encuesta', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async eliminarEvento(id_evento: number) {
+    try {
+      // 1. Delete from Google Calendar if synced
+      const eventoSync = await this.db.evento_calendar.findFirst({
+        where: { id_evento }
+      });
+
+      if (eventoSync && eventoSync.google_calendar_id) {
+        const eventoInfo = await this.db.eventos.findUnique({ where: { id_evento } });
+        if (eventoInfo) {
+          const usuario = await this.db.usuarios.findUnique({ where: { id_usuario: eventoInfo.id_usuario } });
+          if (usuario && usuario.google_refresh_token) {
+            try {
+              const tokensObj = {
+                refresh_token: usuario.google_refresh_token,
+                access_token: usuario.google_access_token,
+              };
+              this.oauth2Client.setCredentials(tokensObj);
+              const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+              await calendar.events.delete({
+                calendarId: 'primary',
+                eventId: eventoSync.google_calendar_id
+              });
+              this.logger.log(`Evento ${eventoSync.google_calendar_id} eliminado de Google Calendar.`);
+            } catch (gErr: any) {
+              this.logger.error(`Error al eliminar de Google Calendar: ${gErr.message}`);
+            }
+          }
+        }
+      }
+
+      // 2. Remove dependencies before deleting event
+      await this.db.$transaction([
+        this.db.asistencia_evento.deleteMany({ where: { id_evento } }),
+        this.db.evento_calendar.deleteMany({ where: { id_evento } }),
+        this.db.evento_cancelacion.deleteMany({ where: { id_evento } }),
+        this.db.evento_configuracion.deleteMany({ where: { id_evento } }),
+        this.db.evento_departamento.deleteMany({ where: { id_evento } }),
+        this.db.evento_historial.deleteMany({ where: { id_evento } }),
+        this.db.evento_material.deleteMany({ where: { id_evento } }),
+        this.db.notificaciones.deleteMany({ where: { id_evento } }),
+        this.db.proveedor_evento.deleteMany({ where: { id_evento } }),
+        this.db.reportes_evento.deleteMany({ where: { id_evento } }),
+      ]);
+
+      // 3. Clean up encuestas if any
+      const encuestas = await this.db.encuestas.findMany({ where: { id_evento } });
+      for (const encuesta of encuestas) {
+        const preguntas = await this.db.preguntas_encuesta.findMany({ where: { id_encuesta: encuesta.id_encuesta } });
+        for (const pregunta of preguntas) {
+          await this.db.respuesta_pregunta.deleteMany({ where: { id_pregunta: pregunta.id_pregunta } });
+          await this.db.opciones_pregunta.deleteMany({ where: { id_pregunta: pregunta.id_pregunta } });
+        }
+        await this.db.preguntas_encuesta.deleteMany({ where: { id_encuesta: encuesta.id_encuesta } });
+      }
+      await this.db.encuestas.deleteMany({ where: { id_evento } });
+
+      // 4. Delete the event itself
+      await this.db.eventos.delete({
+        where: { id_evento },
+      });
+
+      return {
+        exito: true,
+        mensaje: 'Evento eliminado correctamente.',
+      };
+    } catch (error: any) {
+      this.logger.error(`Error al eliminar evento: ${error.message}`);
+      throw new HttpException(
+        `Error al eliminar evento: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
