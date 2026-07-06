@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Query, Res } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, Res, Patch, Param, ParseIntPipe } from '@nestjs/common';
 import { EventosService } from './eventos.service';
 import { CrearEventoDto } from './dto/crear-evento.dto';
 
@@ -13,10 +13,26 @@ export class EventosController {
     return await this.eventosService.agendarYNotificar(datosFormulario);
   }
 
+  @Patch(':id')
+  async editarEvento(
+    @Param('id', ParseIntPipe) id_evento: number,
+    @Body() datosFormulario: CrearEventoDto
+  ) {
+    return await this.eventosService.actualizarEvento(id_evento, datosFormulario);
+  }
+
   @Get()
   async obtenerEventos(@Query('id_usuario') id_usuario?: string) {
     const idUsuarioNum = id_usuario ? parseInt(id_usuario) : undefined;
     return await this.eventosService.obtenerTodos(idUsuarioNum);
+  }
+
+  @Patch(':id/cobertura')
+  async asignarCobertura(
+    @Param('id', ParseIntPipe) id_evento: number,
+    @Body() data: { proveedoresIds: number[], id_usuario: number }
+  ) {
+    return await this.eventosService.asignarCobertura(id_evento, data.proveedoresIds, data.id_usuario);
   }
 
 
