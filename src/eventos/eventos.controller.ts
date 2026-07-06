@@ -11,6 +11,32 @@ export class EventosController {
     return await this.eventosService.agendarYNotificar(datosFormulario);
   }
 
+  @Get('dashboard/stats')
+  async obtenerEstadisticasDashboard() {
+    return await this.eventosService.obtenerEstadisticasDashboard();
+  }
+
+  @Post(':id/asistencia')
+  async registrarAsistencia(
+    @Param('id', ParseIntPipe) id_evento: number,
+    @Body() datos: any
+  ) {
+    return await this.eventosService.registrarAsistencia(id_evento, datos);
+  }
+
+  @Post(':id/encuesta')
+  async registrarEncuesta(
+    @Param('id', ParseIntPipe) id_evento: number,
+    @Body() datos: any
+  ) {
+    return await this.eventosService.registrarEncuesta(id_evento, datos);
+  }
+
+  @Get(':id/reporte')
+  async obtenerReporteEvento(@Param('id', ParseIntPipe) id_evento: number) {
+    return await this.eventosService.obtenerReporteEvento(id_evento);
+  }
+
   // 2. Editar un evento existente
   @Patch(':id')
   async editarEvento(

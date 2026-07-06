@@ -732,23 +732,23 @@ export class EventosService {
   async registrarAsistencia(id_evento: number, datos: any) {
     try {
       const { nombre, semestre, carrera } = datos;
-      
-      const nuevoInvitado = await this.db.invitados.create({
+      // 1. Crear invitado
+      const invitado = await this.db.invitados.create({
         data: {
           nombre_invitado: nombre,
-          institucion_invitado: `Semestre: ${semestre}, Carrera: ${carrera}`,
-          tipo_invitado: 'Asistente',
+          apellidop_invitado: semestre ? `Semestre: ${semestre}` : '',
+          apellidom_invitado: carrera ? `Carrera: ${carrera}` : '',
+          tipo_invitado: 'Estudiante',
         }
       });
-
+      // 2. Registrar asistencia
       await this.db.asistencia_evento.create({
         data: {
-          id_evento: id_evento,
-          id_invitado: nuevoInvitado.id_invitado,
+          id_evento,
+          id_invitado: invitado.id_invitado,
           asistencia: true,
         }
       });
-
       return { exito: true, mensaje: 'Asistencia registrada correctamente.' };
     } catch (error: any) {
       this.logger.error(`Error al registrar asistencia: ${error.message}`);
@@ -760,76 +760,68 @@ export class EventosService {
     try {
       const { correo, calificacion, comentarios, recomendacion } = datos;
 
-      let invitado = await this.db.invitados.findFirst({
-        where: { correo_invitado: correo }
-      });
-      if (!invitado) {
-        invitado = await this.db.invitados.create({
-          data: {
-            correo_invitado: correo,
-            nombre_invitado: 'Asistente (Encuesta)',
-          }
-        });
-      }
-
+      // Ensure Encuesta exists
       let encuesta = await this.db.encuestas.findFirst({
         where: { id_evento }
       });
       if (!encuesta) {
         encuesta = await this.db.encuestas.create({
           data: {
-            id_evento,
-            titulo_encuesta: 'Encuesta de Satisfacción',
+            titulo_encuesta: 'Encuesta General',
+            id_evento
           }
         });
       }
 
-      let tipoPregunta = await this.db.tipo_pregunta.findFirst();
-      if (!tipoPregunta) {
-        tipoPregunta = await this.db.tipo_pregunta.create({
-          data: { nombre_tipo: 'Texto Abierto' }
+      // Check if questions exist, if not create them (1 for each: calif, comentarios, recom)
+      let preguntas = await this.db.preguntas_encuesta.findMany({
+        where: { id_encuesta: encuesta.id_encuesta }
+      });
+      if (preguntas.length === 0) {
+        await this.db.preguntas_encuesta.createMany({
+          data: [
+            { id_encuesta: encuesta.id_encuesta, id_tipo_pregunta: 1, pregunta: 'Calificacion' },
+            { id_encuesta: encuesta.id_encuesta, id_tipo_pregunta: 1, pregunta: 'Comentarios' },
+            { id_encuesta: encuesta.id_encuesta, id_tipo_pregunta: 1, pregunta: 'Recomendacion' }
+          ]
+        });
+        preguntas = await this.db.preguntas_encuesta.findMany({
+          where: { id_encuesta: encuesta.id_encuesta }
         });
       }
 
-      const getOrCreatePregunta = async (preguntaTexto: string) => {
-        let preg = await this.db.preguntas_encuesta.findFirst({
-          where: { id_encuesta: encuesta!.id_encuesta, pregunta: preguntaTexto }
+      // Find or create invitado
+      let invitado = await this.db.invitados.findFirst({
+        where: { correo_invitado: correo }
+      });
+      if (!invitado) {
+        invitado = await this.db.invitados.create({
+          data: {
+            nombre_invitado: 'Invitado',
+            correo_invitado: correo,
+          }
         });
-        if (!preg) {
-          preg = await this.db.preguntas_encuesta.create({
+      }
+
+      // Record answers
+      const respuestas = [
+        { pre: 'Calificacion', res: calificacion },
+        { pre: 'Comentarios', res: comentarios },
+        { pre: 'Recomendacion', res: recomendacion }
+      ];
+
+      for (const r of respuestas) {
+        const p = preguntas.find(x => x.pregunta === r.pre);
+        if (p) {
+          await this.db.respuesta_pregunta.create({
             data: {
-              id_encuesta: encuesta!.id_encuesta,
-              id_tipo_pregunta: tipoPregunta!.id_tipo_pregunta,
-              pregunta: preguntaTexto
+              id_pregunta: p.id_pregunta,
+              id_invitado: invitado.id_invitado,
+              respuesta_texto: String(r.res)
             }
           });
         }
-        return preg;
-      };
-
-      const pregCalificacion = await getOrCreatePregunta('Calificación General');
-      const pregComentarios = await getOrCreatePregunta('Comentarios');
-      const pregRecomendacion = await getOrCreatePregunta('Recomendación');
-
-      await this.db.respuesta_pregunta.createMany({
-        data: [
-          {
-            id_pregunta: pregCalificacion.id_pregunta,
-            id_invitado: invitado.id_invitado,
-            respuesta_texto: calificacion.toString()
-          },
-          {
-            id_pregunta: pregComentarios.id_pregunta,
-            id_invitado: invitado.id_invitado,
-            respuesta_texto: comentarios
-          },
-          {
-            id_pregunta: pregRecomendacion.id_pregunta,
-            id_invitado: invitado.id_invitado,
-            respuesta_texto: recomendacion
-          }
-        ]
-      });
+      }
 
       return { exito: true, mensaje: 'Encuesta registrada correctamente.' };
     } catch (error: any) {
@@ -910,6 +902,162 @@ export class EventosService {
         `Error al eliminar evento: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
+    }
+  }
+
+  async obtenerEstadisticasDashboard() {
+    try {
+      const now = new Date();
+      
+      // 1. Eventos esta semana
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      
+      const eventosSemana = await this.db.eventos.count({
+        where: {
+          fecha_evento: {
+            gte: startOfWeek,
+            lte: endOfWeek
+          },
+          id_estatus_evento: { not: 3 } // no cancelados
+        }
+      });
+
+      // 2. Eventos este a�o
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      const endOfYear = new Date(now.getFullYear(), 11, 31);
+      
+      const eventosAno = await this.db.eventos.count({
+        where: {
+          fecha_evento: {
+            gte: startOfYear,
+            lte: endOfYear
+          },
+          id_estatus_evento: { not: 3 }
+        }
+      });
+
+      // 3. Asistentes totales
+      const asistentesTotales = await this.db.asistencia_evento.count({
+        where: { asistencia: true }
+      });
+
+      // 4. Datos de la gr�fica (frecuencia mensual a�o actual)
+      const eventosMeses = await this.db.eventos.findMany({
+        where: {
+          fecha_evento: {
+            gte: startOfYear,
+            lte: endOfYear
+          },
+          id_estatus_evento: { not: 3 }
+        },
+        select: { fecha_evento: true }
+      });
+
+      const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+      const conteoPorMes = new Array(12).fill(0);
+      eventosMeses.forEach(e => {
+        if(e.fecha_evento) {
+          conteoPorMes[e.fecha_evento.getMonth()]++;
+        }
+      });
+      const chartData = mesesNombres.map((name, index) => ({
+        name,
+        eventos: conteoPorMes[index]
+      }));
+
+      // 5. Eventos recientes/pr�ximos (4 eventos)
+      const eventosRaw = await this.db.eventos.findMany({
+        take: 4,
+        orderBy: { fecha_evento: 'desc' },
+        include: {
+          asistencia_evento: true,
+          estatus_evento: true
+        }
+      });
+
+      const eventosRecientes = eventosRaw.map(e => {
+        let estadoStr = 'completado';
+        if (e.fecha_evento && e.fecha_evento > now) {
+          estadoStr = 'proximo';
+        }
+        
+        // Month names for nice display
+        const dt = e.fecha_evento;
+        let fechaFormat = 'Sin fecha';
+        if (dt) {
+           const d = dt.getDate().toString().padStart(2, '0');
+           const m = mesesNombres[dt.getMonth()];
+           const y = dt.getFullYear();
+           fechaFormat = `${d} ${m} ${y}`;
+        }
+
+        return {
+          id: e.id_evento,
+          nombre: e.nombre_evento,
+          fecha: fechaFormat,
+          asistentes: e.asistencia_evento.filter(a => a.asistencia).length,
+          estado: estadoStr
+        };
+      });
+
+      return {
+        metrics: {
+          eventosSemana,
+          eventosAno,
+          asistentesTotales
+        },
+        chartData,
+        eventosRecientes
+      };
+    } catch (error: any) {
+      this.logger.error('Error al obtener estadisticas del dashboard: ' + error.message);
+      throw new HttpException('Error al obtener estadsticas', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async obtenerReporteEvento(id_evento: number) {
+    try {
+      const evento = await this.db.eventos.findUnique({
+        where: { id_evento },
+        include: {
+          espacios: true,
+          areas: true,
+          estatus_evento: true,
+          asistencia_evento: true
+        }
+      });
+
+      if (!evento) {
+        throw new HttpException('Evento no encontrado', HttpStatus.NOT_FOUND);
+      }
+
+      const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+      const dt = evento.fecha_evento;
+      let fechaFormat = 'Sin fecha';
+      if (dt) {
+         fechaFormat = `${dt.getDate().toString().padStart(2, '0')} ${mesesNombres[dt.getMonth()]} ${dt.getFullYear()}`;
+      }
+
+      const asistentesConfirmados = evento.asistencia_evento ? evento.asistencia_evento.filter(a => a.asistencia).length : 0;
+
+      return {
+        nombre: evento.nombre_evento,
+        fecha: fechaFormat,
+        ubicacion: evento.espacios?.nombre_espacio || 'Sin ubicación',
+        organizador: evento.areas?.nombre_area || 'Sin organizador',
+        asistentesEsperados: evento.espacios?.capacidad_espacio || 0,
+        asistentesConfirmados: asistentesConfirmados,
+        presupuesto: 'N/A', // O mockeado
+        estado: evento.estatus_evento?.nombre_estatus || 'Sin estado',
+        descripcion: evento.descripcion_evento || 'Sin descripción'
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      this.logger.error(`Error al obtener reporte del evento: ${error.message}`);
+      throw new HttpException('Error al obtener reporte del evento', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }
