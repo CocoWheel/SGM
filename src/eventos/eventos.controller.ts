@@ -1,14 +1,4 @@
-import { 
-  Controller, 
-  Post, 
-  Body, 
-  Get, 
-  Query, 
-  Res, 
-  Patch, 
-  Param, 
-  ParseIntPipe 
-} from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, Res, Patch, Param, ParseIntPipe, Delete } from '@nestjs/common';
 import { EventosService } from './eventos.service';
 
 @Controller('eventos')
