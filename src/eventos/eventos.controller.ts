@@ -31,9 +31,9 @@ export class EventosController {
   @Patch(':id/cobertura')
   async asignarCobertura(
     @Param('id', ParseIntPipe) id_evento: number,
-    @Body() data: { proveedoresIds: number[], id_usuario: number }
+    @Body() data: { proveedoresIds: number[], id_usuario: number, prioridad?: string, estatus?: string }
   ) {
-    return await this.eventosService.asignarCobertura(id_evento, data.proveedoresIds, data.id_usuario);
+    return await this.eventosService.asignarCobertura(id_evento, data.proveedoresIds, data.id_usuario, data.prioridad, data.estatus);
   }
 
   /**
