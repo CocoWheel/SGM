@@ -247,4 +247,66 @@ END:VCALENDAR`;
       html,
     });
   }
+
+  async enviarAvisoCancelacion(correos: string[], evento: any, motivo: string) {
+    if (!correos || correos.length === 0) return;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #db4437; text-align: center; border-bottom: 2px solid #db4437; padding-bottom: 10px;">Evento Cancelado</h2>
+        <p>Hola,</p>
+        <p>Te informamos que el evento <strong>${evento.nombre_evento}</strong>, programado para el <strong>${evento.fecha_evento}</strong>, ha sido <strong>cancelado</strong>.</p>
+        <p><strong>Motivo de la cancelación:</strong></p>
+        <blockquote style="background: #f9f9f9; border-left: 5px solid #ccc; margin: 1.5em 10px; padding: 0.5em 10px; font-style: italic;">
+          ${motivo}
+        </blockquote>
+        <p>Lamentamos los inconvenientes que esto pueda ocasionarte.</p>
+      </div>
+    `;
+
+    try {
+      await this.send({
+        to: correos.join(','),
+        subject: `🚨 Evento Cancelado: ${evento.nombre_evento}`,
+        html,
+      });
+      this.logger.log(`Correo de cancelación enviado a ${correos.length} asistentes.`);
+    } catch (error: any) {
+      this.logger.error(`Error al enviar correo de cancelación: ${error.message}`);
+    }
+  }
+
+  async enviarInvitacionAInvitado(correo: string, evento: any) {
+    if (!correo) return;
+
+    let fechaFormateada = evento.fecha_evento;
+    if (fechaFormateada instanceof Date) {
+      fechaFormateada = fechaFormateada.toISOString().split('T')[0];
+    }
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px;">
+        <h2 style="color: #2b579a; text-align: center; border-bottom: 2px solid #2b579a; padding-bottom: 10px;">Invitación a Evento</h2>
+        <p>Hola,</p>
+        <p>Has sido cordialmente invitado al evento <strong>${evento.nombre_evento}</strong>.</p>
+        <p><strong>Fecha:</strong> ${fechaFormateada}</p>
+        <p><strong>Hora:</strong> ${evento.horainicio_evento} a ${evento.horafin_evento}</p>
+        <p>Por favor, ingresa al sistema para confirmar tu asistencia.</p>
+        <div style="text-align: center; margin-top: 30px;">
+          <a href="http://localhost:5173/eventos/dashboard" style="background-color: #2b579a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ingresar al Sistema</a>
+        </div>
+      </div>
+    `;
+
+    try {
+      await this.send({
+        to: correo,
+        subject: `Invitación al evento: ${evento.nombre_evento}`,
+        html,
+      });
+      this.logger.log(`Invitación por correo enviada a ${correo}.`);
+    } catch (error: any) {
+      this.logger.error(`Error al enviar invitación por correo a ${correo}: ${error.message}`);
+    }
+  }
 }

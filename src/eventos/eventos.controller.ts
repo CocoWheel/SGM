@@ -37,6 +37,21 @@ export class EventosController {
     return await this.eventosService.obtenerReporteEvento(id_evento);
   }
 
+  @Delete(':id')
+  async cancelarEvento(
+    @Param('id', ParseIntPipe) id_evento: number,
+    @Body() body: { motivo: string, id_usuario: number }
+  ) {
+    const { motivo, id_usuario } = body;
+    // Si no hay motivo, llamamos eliminarEvento (borrado físico)
+    // Pero según el requerimiento, la cancelación pide motivo y hace borrado lógico.
+    if (motivo) {
+      return await this.eventosService.cancelarEvento(id_evento, motivo, id_usuario || 1);
+    } else {
+      return await this.eventosService.eliminarEvento(id_evento);
+    }
+  }
+
   // 2. Editar un evento existente
   @Patch(':id')
   async editarEvento(

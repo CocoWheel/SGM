@@ -12,6 +12,7 @@ import { ProveedoresModule } from './proveedores/proveedores.module';
 import { AreasModule } from './areas/areas.module';
 import { AuthModule } from './auth/auth.module';
 import { MaterialesModule } from './materiales/materiales.module';
+import { NotificacionesModule } from './notificaciones/notificaciones.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { MaterialesModule } from './materiales/materiales.module';
     AreasModule,
     AuthModule,
     MaterialesModule,
+    NotificacionesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

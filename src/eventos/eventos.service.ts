@@ -305,6 +305,28 @@ export class EventosService {
         ` Evento e intermedias guardados con éxito en Neon mediante Prisma. ID: ${nuevoEvento.id_evento}`,
       );
 
+      // Crear notificaciones para los invitados que ya sean usuarios
+      if (invitados && invitados.length > 0) {
+        for (const inv of invitados) {
+          if (inv.correo) {
+            const usuarioExistente = await this.db.usuarios.findUnique({
+              where: { correo_usuario: inv.correo }
+            });
+            if (usuarioExistente) {
+              await this.db.notificaciones.create({
+                data: {
+                  titulo_notificacion: "Invitación a evento",
+                  mensaje_notificacion: `Has sido invitado al evento "${nombre}". Por favor confirma tu asistencia.`,
+                  id_usuario: usuarioExistente.id_usuario,
+                  id_evento: nuevoEvento.id_evento,
+                  estatus_notificacion: "Pendiente"
+                }
+              });
+            }
+          }
+        }
+      }
+
       this.ejecutarFlujoCorreosDinamico(nuevoEvento.id_evento).catch(
         (err: any) => {
           this.logger.error(
@@ -377,6 +399,20 @@ export class EventosService {
         await this.mailService.enviarNotificacionArea(
           area.correo_proveedor,
           infoEventoCompleto,
+        );
+      }
+    }
+
+    // Enviar correo de invitación a cada invitado
+    const listaInvitados = await this.db.asistencia_evento.findMany({
+      where: { id_evento },
+      include: { invitados: true }
+    });
+    for (const asistencia of listaInvitados) {
+      if (asistencia.invitados && asistencia.invitados.correo_invitado) {
+        await this.mailService.enviarInvitacionAInvitado(
+          asistencia.invitados.correo_invitado,
+          infoEventoCompleto
         );
       }
     }
@@ -718,6 +754,28 @@ export class EventosService {
         },
       });
 
+      // Crear notificaciones para los nuevos invitados que ya sean usuarios
+      if (invitados && invitados.length > 0) {
+        for (const inv of invitados) {
+          if (inv.correo) {
+            const usuarioExistente = await this.db.usuarios.findUnique({
+              where: { correo_usuario: inv.correo }
+            });
+            if (usuarioExistente) {
+              await this.db.notificaciones.create({
+                data: {
+                  titulo_notificacion: "Invitación a evento",
+                  mensaje_notificacion: `Has sido invitado al evento "${nombre}". Por favor confirma tu asistencia.`,
+                  id_usuario: usuarioExistente.id_usuario,
+                  id_evento: eventoActualizado.id_evento,
+                  estatus_notificacion: "Pendiente"
+                }
+              });
+            }
+          }
+        }
+      }
+
       return {
         exito: true,
         mensaje: 'Evento actualizado con éxito.',
@@ -816,16 +874,26 @@ export class EventosService {
       ];
 
       for (const r of respuestas) {
-        const p = preguntas.find(x => x.pregunta === r.pre);
-        if (p) {
-          await this.db.respuesta_pregunta.create({
+        let p = preguntas.find(x => x.pregunta === r.pre);
+        if (!p) {
+          // Si por alguna razón la pregunta no existe en la BD (ej. evento viejo), la creamos
+          p = await this.db.preguntas_encuesta.create({
             data: {
-              id_pregunta: p.id_pregunta,
-              id_invitado: invitado.id_invitado,
-              respuesta_texto: String(r.res)
+              id_encuesta: encuesta.id_encuesta,
+              id_tipo_pregunta: r.pre === 'Comentarios' ? 2 : 1,
+              pregunta: r.pre
             }
           });
+          preguntas.push(p);
         }
+
+        await this.db.respuesta_pregunta.create({
+          data: {
+            id_pregunta: p.id_pregunta,
+            id_invitado: invitado.id_invitado,
+            respuesta_texto: String(r.res)
+          }
+        });
       }
 
       return { exito: true, mensaje: 'Encuesta registrada correctamente.' };
@@ -907,6 +975,79 @@ export class EventosService {
         `Error al eliminar evento: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
+    }
+  }
+
+  async cancelarEvento(id_evento: number, motivo: string, id_usuario: number) {
+    try {
+      // Validar si el evento existe
+      const evento = await this.db.eventos.findUnique({
+        where: { id_evento },
+        include: { asistencia_evento: { include: { invitados: true } } }
+      });
+
+      if (!evento) {
+        throw new HttpException('Evento no encontrado', HttpStatus.NOT_FOUND);
+      }
+
+      // Cambiar estatus a Cancelado (3)
+      await this.db.eventos.update({
+        where: { id_evento },
+        data: { id_estatus_evento: 3 }
+      });
+
+      // Insertar motivo en evento_cancelacion
+      await this.db.evento_cancelacion.create({
+        data: {
+          motivo_cancelacion: motivo,
+          fecha_cancelacion: new Date(),
+          id_evento: id_evento,
+          id_usuario: id_usuario
+        }
+      });
+
+      // Obtener correos de invitados y enviar email
+      const correos = evento.asistencia_evento
+        .map((inv: any) => inv.invitados?.correo_invitado)
+        .filter((c: any) => c && c.trim() !== '');
+
+      if (correos.length > 0) {
+        await this.mailService.enviarAvisoCancelacion(correos, evento, motivo);
+      }
+
+      // Eliminar de Google Calendar si estaba sincronizado
+      const eventoSync = await this.db.evento_calendar.findFirst({
+        where: { id_evento }
+      });
+
+      if (eventoSync && eventoSync.google_calendar_id) {
+        const usuario = await this.db.usuarios.findUnique({ where: { id_usuario: evento.id_usuario } });
+        if (usuario && usuario.google_refresh_token) {
+          try {
+            const tokensObj = {
+              refresh_token: usuario.google_refresh_token,
+              access_token: usuario.google_access_token,
+            };
+            this.oauth2Client.setCredentials(tokensObj);
+            const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+            await calendar.events.delete({
+              calendarId: 'primary',
+              eventId: eventoSync.google_calendar_id
+            });
+            this.logger.log(`Evento cancelado y eliminado de Google Calendar.`);
+          } catch (gErr: any) {
+            this.logger.error(`Error al eliminar de Google Calendar tras cancelación: ${gErr.message}`);
+          }
+        }
+      }
+
+      return {
+        exito: true,
+        mensaje: 'Evento cancelado correctamente y correos enviados.'
+      };
+    } catch (error: any) {
+      this.logger.error(`Error al cancelar evento: ${error.message}`);
+      throw new HttpException(`Error al cancelar evento: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -1031,7 +1172,8 @@ export class EventosService {
           espacios: true,
           areas: true,
           estatus_evento: true,
-          asistencia_evento: true
+          asistencia_evento: true,
+          evento_cancelacion: true
         }
       });
 
@@ -1048,6 +1190,51 @@ export class EventosService {
 
       const asistentesConfirmados = evento.asistencia_evento ? evento.asistencia_evento.filter(a => a.asistencia).length : 0;
 
+      // Obtener comentarios de encuestas
+      const encuestas = await this.db.encuestas.findMany({
+        where: { id_evento },
+        include: {
+          preguntas_encuesta: {
+            include: {
+              respuesta_pregunta: true
+            }
+          }
+        }
+      });
+
+      const feedbackByInvitado: Record<number, any> = {};
+
+      encuestas.forEach(enc => {
+        enc.preguntas_encuesta.forEach(preg => {
+          preg.respuesta_pregunta.forEach(resp => {
+            if (!feedbackByInvitado[resp.id_invitado]) {
+              feedbackByInvitado[resp.id_invitado] = {
+                calificacion: 'N/A',
+                comentario: '',
+                recomendacion: 'N/A',
+              };
+            }
+            if (preg.pregunta === 'Calificacion') {
+              feedbackByInvitado[resp.id_invitado].calificacion = resp.respuesta_texto;
+            } else if (preg.pregunta === 'Comentarios') {
+              feedbackByInvitado[resp.id_invitado].comentario = resp.respuesta_texto;
+            } else if (preg.pregunta === 'Recomendacion') {
+              feedbackByInvitado[resp.id_invitado].recomendacion = resp.respuesta_texto;
+            } else {
+                feedbackByInvitado[resp.id_invitado][preg.pregunta] = resp.respuesta_texto;
+            }
+          });
+        });
+      });
+
+      const comentarios = Object.values(feedbackByInvitado).filter(f => f.comentario && f.comentario.trim() !== '');
+
+      let motivoCancelacion: string | null = null;
+      if (evento.evento_cancelacion && evento.evento_cancelacion.length > 0) {
+        // Asumiendo que obtienes el último registro de cancelación si hay múltiples, o solo el primero
+        motivoCancelacion = evento.evento_cancelacion[evento.evento_cancelacion.length - 1].motivo_cancelacion;
+      }
+
       return {
         nombre: evento.nombre_evento,
         fecha: fechaFormat,
@@ -1057,7 +1244,10 @@ export class EventosService {
         asistentesConfirmados: asistentesConfirmados,
         presupuesto: 'N/A', // O mockeado
         estado: evento.estatus_evento?.nombre_estatus || 'Sin estado',
-        descripcion: evento.descripcion_evento || 'Sin descripción'
+        descripcion: evento.descripcion_evento || 'Sin descripción',
+        comentarios: comentarios,
+        motivoCancelacion: motivoCancelacion
+
       };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
