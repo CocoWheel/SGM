@@ -282,7 +282,27 @@ END:VCALENDAR`;
     let fechaFormateada = evento.fecha_evento;
     if (fechaFormateada instanceof Date) {
       fechaFormateada = fechaFormateada.toISOString().split('T')[0];
+    } else if (typeof fechaFormateada === 'string' && fechaFormateada.includes('T')) {
+      fechaFormateada = fechaFormateada.split('T')[0];
     }
+
+    const horaInicioStr = (evento.horainicio_evento || '00:00').length === 5 ? `${evento.horainicio_evento}:00` : evento.horainicio_evento;
+    const horaFinStr = (evento.horafin_evento || '00:00').length === 5 ? `${evento.horafin_evento}:00` : evento.horafin_evento;
+
+    const fechaInicio = new Date(`${fechaFormateada}T${horaInicioStr}-06:00`);
+    const fechaFin = new Date(`${fechaFormateada}T${horaFinStr}-06:00`);
+
+    const formatDateForURL = (date: Date) => {
+      if (isNaN(date.getTime())) return new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
+
+    const dates = `${formatDateForURL(fechaInicio)}/${formatDateForURL(fechaFin)}`;
+    const text = encodeURIComponent(evento.nombre_evento || '');
+    const details = encodeURIComponent(evento.descripcion_evento || '');
+    const location = encodeURIComponent(evento.nombre_espacio || '');
+    
+    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}&location=${location}`;
 
     const html = `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px;">
@@ -291,9 +311,9 @@ END:VCALENDAR`;
         <p>Has sido cordialmente invitado al evento <strong>${evento.nombre_evento}</strong>.</p>
         <p><strong>Fecha:</strong> ${fechaFormateada}</p>
         <p><strong>Hora:</strong> ${evento.horainicio_evento} a ${evento.horafin_evento}</p>
-        <p>Por favor, ingresa al sistema para confirmar tu asistencia.</p>
+        <p>Guarda la fecha en tu calendario para que no te lo pierdas.</p>
         <div style="text-align: center; margin-top: 30px;">
-          <a href="http://localhost:5173/eventos/dashboard" style="background-color: #2b579a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ingresar al Sistema</a>
+          <a href="${googleCalendarUrl}" target="_blank" rel="noopener noreferrer" style="background-color: #4285f4; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Agregar a Google Calendar</a>
         </div>
       </div>
     `;
